@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a1a0f">
+<title>Acerto Motorista</title>
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-title" content="Acerto Motorista">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;scroll-behavior:smooth}
+body{font-family:'Sora',sans-serif;background:#0a0f1e;color:#e2e8f0;min-height:100vh;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#2a3555;border-radius:4px}
+input,button,textarea,select{font-family:inherit}
+:root{
+  --bg0:#0a0f1e;--bg1:#111827;--bg2:#1a2236;--bg3:#243050;
+  --bdr:#2a3555;--bdr2:#374369;
+  --t1:#f0f4ff;--t2:#94a3b8;--t3:#4a5880;
+  --blue:#3b7eff;--blue2:#2563d4;
+  --green:#22d47a;--green2:#15a55c;
+  --amber:#f5a623;--red:#ff4f4f;--purple:#a78bfa;
+  --r:12px;--rs:8px;
+  --shadow:0 4px 24px rgba(0,0,0,.5);
+  --tr:.15s cubic-bezier(.4,0,.2,1);
+}
+#app{min-height:100vh}
+.screen{display:none;flex-direction:column;min-height:100vh}
+.screen.active{display:flex}
+.topbar{position:sticky;top:0;z-index:100;background:rgba(10,15,30,.94);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--bdr);padding:14px 16px;display:flex;align-items:center;gap:10px}
+.topbar .brand{font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.12em;flex-shrink:0}
+.topbar h1{font-size:16px;font-weight:700;color:var(--t1);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar .back{background:none;border:none;color:var(--t2);font-size:22px;cursor:pointer;padding:4px 8px 4px 0;line-height:1;flex-shrink:0}
+.content{flex:1;padding:16px;max-width:520px;margin:0 auto;width:100%;padding-bottom:100px}
+.card{background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--r);padding:16px;margin-bottom:12px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 20px;height:48px;border-radius:var(--rs);font-size:14px;font-weight:700;cursor:pointer;border:none;transition:var(--tr);white-space:nowrap;font-family:inherit}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--blue);color:#fff}.btn-primary:hover{background:var(--blue2)}
+.btn-success{background:var(--green);color:#0a0f1e}.btn-success:hover{background:var(--green2)}
+.btn-outline{background:transparent;color:var(--t2);border:1px solid var(--bdr2)}.btn-outline:hover{border-color:var(--blue);color:var(--blue)}
+.btn-danger{background:var(--red);color:#fff}
+.btn-block{width:100%;display:flex}
+.btn-sm{height:38px;padding:0 14px;font-size:13px}
+.inp{width:100%;background:var(--bg3);border:1px solid var(--bdr2);border-radius:var(--rs);padding:12px 14px;color:var(--t1);font-size:14px;transition:var(--tr);outline:none;font-family:inherit}
+.inp:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(59,126,255,.15)}
+.inp::placeholder{color:var(--t3)}
+.lbl{font-size:12px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;display:block}
+.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.badge-pendente{background:rgba(245,166,35,.15);color:var(--amber)}
+.badge-parcial{background:rgba(167,139,250,.15);color:var(--purple)}
+.badge-concluido{background:rgba(34,212,122,.15);color:var(--green)}
+.mono{font-family:'JetBrains Mono',monospace;font-weight:600}
+.prog-wrap{background:var(--bg3);border-radius:4px;height:6px;overflow:hidden}
+.prog-fill{height:100%;background:var(--green);border-radius:4px;transition:width .4s ease}
+.divider{border:none;border-top:1px solid var(--bdr);margin:14px 0}
+/* NF rows na lista */
+.nf-sel-row{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--bg3);border-radius:var(--rs);margin-top:6px;cursor:pointer;transition:var(--tr);border:1px solid transparent}
+.nf-sel-row:active{opacity:.7}
+.nf-sel-row.selected{background:rgba(59,126,255,.12);border-color:rgba(59,126,255,.3)}
+.nf-sel-row.bon{background:rgba(167,139,250,.06);cursor:default}
+.nf-check{width:24px;height:24px;accent-color:var(--blue);cursor:pointer;flex-shrink:0}
+.nf-check:disabled{opacity:.4;cursor:default}
+/* parcelas */
+.parcela-row{display:flex;align-items:center;gap:8px;background:var(--bg3);border-radius:var(--rs);padding:10px 12px;margin-bottom:8px}
+.parcela-forma{font-size:13px;font-weight:700;color:var(--t1);flex:1}
+.parcela-val{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--green)}
+.rem-parcela{background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;padding:2px 6px;line-height:1}
+.forma-btn{flex:1;min-width:0;height:52px;border-radius:var(--rs);font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--bdr2);background:var(--bg3);color:var(--t2);transition:var(--tr);font-family:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.forma-btn:active{transform:scale(.95)}
+.forma-btn.ativo{border-color:var(--blue);background:rgba(59,126,255,.15);color:var(--blue)}
+/* devoluções */
+.dev-list{margin-top:8px;background:rgba(255,79,79,.07);border:1px solid rgba(255,79,79,.2);border-radius:var(--rs);padding:8px 12px}
+.dev-item{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--t2);padding:5px 0;border-bottom:1px solid rgba(255,79,79,.1)}
+.dev-item:last-child{border-bottom:none}
+.rem-dev{background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;padding:2px 4px;line-height:1}
+.dev-form{background:var(--bg3);border-radius:var(--rs);padding:12px;margin-top:8px}
+/* bottom bar */
+.bottom-bar{position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(10,15,30,.96);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--bdr);padding:12px 16px;display:flex;gap:10px;max-width:520px;margin:0 auto}
+/* fechamento */
+.fech-total{background:rgba(34,212,122,.08);border:1px solid rgba(34,212,122,.2);border-radius:var(--r);padding:18px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.fech-total .fl{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--green)}
+.fech-total .fv{font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:800;color:var(--green)}
+.frow{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--bdr)}
+.frow:last-child{border-bottom:none}
+.fl2{font-size:13px;color:var(--t2)}
+.fv2{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--t1)}
+/* cliente card */
+.cli-card{background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--r);padding:14px 16px;margin-bottom:8px;transition:var(--tr)}
+.cli-card.done{border-color:rgba(34,212,122,.25);opacity:.85}
+.cli-card-header{display:flex;align-items:center;gap:12px;cursor:pointer;user-select:none}
+.cli-card-header:active{opacity:.7}
+.cli-notas{padding-top:2px;display:none}
+.cli-notas.open{display:block}
+/* home */
+.home-btn{display:flex;align-items:center;gap:16px;background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--r);padding:20px;cursor:pointer;transition:var(--tr);color:var(--t1);width:100%;text-align:left;font-family:inherit}
+.home-btn:active{border-color:var(--blue);background:var(--bg3)}
+/* utils */
+.empty{text-align:center;padding:60px 20px;color:var(--t3)}
+.warn{background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);border-radius:var(--rs);padding:12px 14px;font-size:13px;color:var(--amber);margin-bottom:14px}
+.err{background:rgba(255,79,79,.1);border-radius:var(--rs);padding:10px 14px;font-size:13px;color:var(--red);margin-bottom:12px}
+.spin{display:inline-block;width:28px;height:28px;border:2px solid var(--bdr2);border-top-color:var(--blue);border-radius:50%;animation:spin .6s linear infinite}
+.toast{position:fixed;bottom:106px;left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--bdr2);border-radius:var(--rs);padding:10px 20px;font-size:13px;font-weight:700;color:var(--t1);z-index:500;animation:fadeIn .2s;box-shadow:var(--shadow);white-space:nowrap;pointer-events:none}
+.hist-card{background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--rs);padding:12px 14px;margin-bottom:8px;cursor:pointer;opacity:.75;transition:var(--tr)}
+.hist-card:active{opacity:1}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- HOME -->
+<div id="s-home" class="screen active">
+  <div class="topbar"><span class="brand">Mirai</span><h1>Acerto de Carga</h1></div>
+  <div class="content" id="home-content"></div>
+</div>
+
+<!-- CARREGAR MAPA -->
+<div id="s-carregar" class="screen">
+  <div class="topbar">
+    <button class="back" onclick="ir('s-home')">←</button>
+    <span class="brand">Mirai</span>
+    <h1 id="carr-title">Carregar Mapa</h1>
+  </div>
+  <div class="content" id="carr-content"></div>
+</div>
+
+<!-- LISTA CLIENTES -->
+<div id="s-lista" class="screen">
+  <div class="topbar">
+    <button class="back" onclick="ir('s-home')">←</button>
+    <span class="brand" id="lista-brand">Mapa</span>
+    <h1 id="lista-title">Rota</h1>
+    <button onclick="ir('s-fech')" style="background:rgba(34,212,122,.12);border:1px solid rgba(34,212,122,.3);border-radius:8px;padding:7px 11px;color:var(--green);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">📋 Fechar</button>
+  </div>
+  <div class="content" id="lista-content"></div>
+  <div class="bottom-bar" id="lista-bar" style="padding:0;gap:0">
+    <div id="lista-bar-inner" style="display:flex;gap:10px;padding:12px 16px;width:100%"></div>
+  </div>
+</div>
+
+<!-- ACERTO DE LOTE -->
+<div id="s-acerto" class="screen">
+  <div class="topbar">
+    <button class="back" onclick="voltarParaLista()">←</button>
+    <span class="brand">Acerto</span>
+    <h1 id="acerto-titulo">Acerto de Notas</h1>
+  </div>
+  <div class="content" id="acerto-content"></div>
+  <div class="bottom-bar" id="acerto-bar"></div>
+</div>
+
+<!-- FECHAMENTO -->
+<div id="s-fech" class="screen">
+  <div class="topbar">
+    <button class="back" onclick="ir('s-lista')">←</button>
+    <span class="brand" id="fech-brand">Mapa</span>
+    <h1>Fechamento da Rota</h1>
+  </div>
+  <div class="content" id="fech-content"></div>
+  <div class="bottom-bar" id="fech-bar"></div>
+</div>
+
+<!-- HISTÓRICO -->
+<div id="s-hist" class="screen">
+  <div class="topbar">
+    <button class="back" onclick="ir('s-home')">←</button>
+    <span class="brand" id="hist-brand">Mapa</span>
+    <h1>Resumo Arquivado</h1>
+  </div>
+  <div class="content" id="hist-content"></div>
+  <div class="bottom-bar" id="hist-bar"></div>
+</div>
+
+<div id="toast-el" class="toast" style="display:none"></div>
+
+<script>
+/* ══ ESTADO ══ */
+const SK_ATIVO = 'mirai_ativo_v4';
+const SK_HIST  = 'mirai_hist_v4';
+let mapaAtivo = null;
+let historico  = [];
+let histView   = null;
+let selecao      = new Set();  // n.id das NFs marcadas para acerto
+let devAberto    = null;       // n.id com form de devolução aberto
+let parcelas     = [];         // [{forma, valor}] sendo montadas no acerto
+let formaAtual   = null;       // forma selecionada no picker
+let loteReaberto = null;       // loteId sendo editado (null = acerto novo)
+
+function salvar()    { try { localStorage.setItem(SK_ATIVO, JSON.stringify(mapaAtivo)); } catch{} }
+function salvarHist(){ try { localStorage.setItem(SK_HIST,  JSON.stringify(historico));  } catch{} }
+
+(function init(){
+  try { mapaAtivo = JSON.parse(localStorage.getItem(SK_ATIVO)||'null'); } catch{}
+  try { historico  = JSON.parse(localStorage.getItem(SK_HIST)||'[]');   } catch{}
+})();
+
+/* ══ UTILS ══ */
+function fmt(v){
+  const n=Math.abs(v||0);
+  const s=n.toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+  return (v<0?'−':'')+'R$ '+s;
+}
+function parseBRL(v){ return parseFloat(String(v||'').replace(/\./g,'').replace(',','.'))||0; }
+function uid(){ return Math.random().toString(36).slice(2,8); }
+function hoje(){ return new Date().toLocaleDateString('pt-BR'); }
+function agora(){ return new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }
+function toast(msg,dur=2400){
+  const el=document.getElementById('toast-el');
+  el.textContent=msg; el.style.display='block';
+  clearTimeout(el._t); el._t=setTimeout(()=>el.style.display='none',dur);
+}
+function icoPagto(f){ return f==='dinheiro'?'💵':f==='pix'?'📲':f==='boleto'?'📄':f==='pendente'?'⏳':'🎁'; }
+
+function ir(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0,0);
+  if(id==='s-home')   renderHome();
+  if(id==='s-lista')  renderLista();
+  if(id==='s-acerto') renderAcerto();
+  if(id==='s-fech')   renderFech();
+  if(id==='s-hist')   renderHist();
+}
+
+/* ══ PARSER TXT ══ */
+function parseTXT(raw){
+  const lines = raw.replace(/\r\n/g,'\n').split('\n');
+  let meta = { mapa:'', rota:'', vendedor:'', data:hoje() };
+  const cliMap = {};
+  let m;
+  if((m=raw.match(/Mapa\.+:\s*(\d+)/)))            meta.mapa     = m[1].trim();
+  if((m=raw.match(/Rota\.+:\s*(.+?)\s{3,}/)))      meta.rota     = m[1].trim();
+  if((m=raw.match(/VENDEDOR\.\:?\s*(.+?)\s{3,}/))) meta.vendedor = m[1].trim();
+  if((m=raw.match(/Data:\s*(\d{2}\/\d{2}\/\d{2,4})/))) meta.data = m[1].trim();
+
+  const notaPat = /^\s{1,5}(\d{3})\s+\d+\s+(\d{4,5})\s+(.{20,29})(S Dinh|Vista)\s+(\d{6,7})\s+\s*(\d{1,3}(?:\.\d{3})*,\d{2})\s+(.+?)\s+____________/;
+  for(const line of lines){
+    if(!/^\s{1,5}\d{3}\s/.test(line)) continue;
+    const nm = notaPat.exec(line);
+    if(!nm) continue;
+    const [,rotaCod,codCli,nomeCli,,nfNum,valorStr,tabStr] = nm;
+    const cod   = codCli.trim();
+    const nome  = nomeCli.trim().toUpperCase();
+    const valor = parseBRL(valorStr);
+    const tab   = tabStr.trim().toLowerCase();
+    const tipo  = tab.includes('bon')?'bon':tab.includes('blo')?'fat blo':'fat vis';
+    if(!cliMap[cod]) cliMap[cod]={ codigo:cod, nome, rota:rotaCod, notas:[] };
+    if(!cliMap[cod].notas.find(x=>x.nf===nfNum)){
+      cliMap[cod].notas.push({
+        id: nfNum+'_'+uid(), nf:nfNum, valor, tipo,
+        acertada: tipo==='bon',
+        pagamentos: tipo==='bon'?[{forma:'bonificacao',valor:0}]:[],
+        devolucoes: []
+      });
+    }
+  }
+  if(!meta.mapa) throw new Error('Número do mapa não encontrado.');
+  if(!Object.keys(cliMap).length) throw new Error('Nenhum cliente encontrado.');
+  return { meta, clientes: Object.values(cliMap).sort((a,b)=>a.nome.localeCompare(b.nome)) };
+}
+
+/* ══ HOME ══ */
+function calcProg(carga){
+  const total=carga.clientes.reduce((a,c)=>a+c.notas.filter(n=>n.tipo!=='bon').length,0);
+  const ac   =carga.clientes.reduce((a,c)=>a+c.notas.filter(n=>n.acertada&&n.tipo!=='bon').length,0);
+  return total>0?Math.round(ac/total*100):0;
+}
+function statusCliente(notas){
+  const reais=notas.filter(n=>n.tipo!=='bon');
+  if(!reais.length) return 'concluido';
+  const ac=reais.filter(n=>n.acertada).length;
+  if(ac===reais.length) return 'concluido';
+  if(ac>0) return 'parcial';
+  return 'pendente';
+}
+
+function renderHome(){
+  const el=document.getElementById('home-content');
+  let html='';
+  if(mapaAtivo){
+    const prog=calcProg(mapaAtivo);
+    const tv=mapaAtivo.clientes.reduce((a,c)=>a+c.notas.reduce((b,n)=>b+(n.tipo==='bon'?0:n.valor),0),0);
+    const conc=mapaAtivo.clientes.filter(c=>statusCliente(c.notas)==='concluido').length;
+    html+=`<div class="card" style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">Mapa em andamento</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+        <div>
+          <div style="font-size:24px;font-weight:800;color:var(--t1);font-family:'JetBrains Mono',monospace">${mapaAtivo.meta.mapa}</div>
+          <div style="font-size:12px;color:var(--t2);margin-top:2px">${mapaAtivo.meta.rota||'—'} · ${mapaAtivo.meta.data}</div>
+          <div style="font-size:12px;color:var(--t3);margin-top:1px">${conc} de ${mapaAtivo.clientes.length} clientes concluídos</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:26px;font-weight:900;color:var(--green);font-family:'JetBrains Mono',monospace">${prog}%</div>
+          <div style="font-size:11px;color:var(--t3)">concluído</div>
+        </div>
+      </div>
+      <div class="prog-wrap"><div class="prog-fill" style="width:${prog}%"></div></div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--green);flex:1;align-self:center">${fmt(tv)}</div>
+        <button class="btn btn-success" onclick="ir('s-lista')">▶ Continuar</button>
+      </div>
+    </div>`;
+  } else {
+    html+=`<div style="text-align:center;padding:32px 0 24px">
+      <div style="font-size:50px;margin-bottom:10px">🚛</div>
+      <div style="font-size:15px;font-weight:700;color:var(--t2);margin-bottom:4px">Nenhuma carga ativa</div>
+      <div style="font-size:12px;color:var(--t3)">Carregue um mapa para começar</div>
+    </div>`;
+  }
+  html+=`<button class="btn ${mapaAtivo?'btn-outline':'btn-primary'} btn-block" style="margin-bottom:16px" onclick="ir('s-carregar')">
+    📂 ${mapaAtivo?'Carregar novo mapa':'Carregar mapa'}</button>`;
+  if(historico.length){
+    html+=`<div style="font-size:12px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Mapas anteriores</div>`;
+    historico.slice(0,5).forEach((m,i)=>{
+      const tv=m.clientes.reduce((a,c)=>a+c.notas.reduce((b,n)=>b+(n.tipo==='bon'?0:n.valor),0),0);
+      html+=`<div class="hist-card" onclick="verHist(${i})">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--t1);font-family:'JetBrains Mono',monospace">${m.meta.mapa}</div>
+            <div style="font-size:11px;color:var(--t3);margin-top:2px">${m.meta.data} · arquivado ${m.arquivadoEm||''}</div>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--t2)">${fmt(tv)}</div>
+        </div>
+      </div>`;
+    });
+  }
+  el.innerHTML=html;
+}
+
+/* ══ CARREGAR MAPA ══ */
+let etapaCarr='form'; let previewData=null; let txtCarregado='';
+
+function renderCarregar(){
+  const el=document.getElementById('carr-content');
+  document.getElementById('carr-title').textContent=etapaCarr==='form'?'Carregar Mapa':'Confirmar Carga';
+  if(etapaCarr==='form'){
+    const aviso=mapaAtivo?`<div class="warn">⚠️ Carregar novo mapa vai arquivar o atual (<strong>${mapaAtivo.meta.mapa}</strong>).</div>`:'';
+    el.innerHTML=`${aviso}
+    <input type="file" id="inp-file" accept=".txt,text/plain" style="display:none" onchange="lerArquivo(this.files[0])">
+    <div id="dropzone" onclick="document.getElementById('inp-file').click()"
+      ondragover="event.preventDefault();this.classList.add('dz-drag')"
+      ondragleave="this.classList.remove('dz-drag')"
+      ondrop="event.preventDefault();this.classList.remove('dz-drag');lerArquivo(event.dataTransfer.files[0])"
+      style="border:2px dashed var(--bdr2);border-radius:var(--r);padding:36px 20px;text-align:center;cursor:pointer;background:var(--bg2);transition:var(--tr);margin-bottom:16px">
+      <div style="font-size:40px;margin-bottom:10px">📄</div>
+      <div style="font-size:15px;font-weight:700;color:var(--t1);margin-bottom:4px">Selecionar arquivo .txt</div>
+      <div style="font-size:12px;color:var(--t3)">Toque aqui para escolher o arquivo do mapa</div>
+    </div>
+    <div id="nome-arquivo" style="display:none;background:var(--bg3);border:1px solid var(--bdr2);border-radius:var(--rs);padding:10px 14px;margin-bottom:14px;align-items:center;gap:10px">
+      <span style="font-size:20px">📄</span>
+      <div style="flex:1;min-width:0">
+        <div id="nome-arq-txt" style="font-size:13px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+        <div id="tam-arq-txt" style="font-size:11px;color:var(--t3)"></div>
+      </div>
+      <button onclick="limparArquivo()" style="background:none;border:none;color:var(--red);font-size:20px;cursor:pointer;padding:0 4px;line-height:1">×</button>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:14px">
+      <div style="flex:1">
+        <label class="lbl">Nº do Mapa <span style="color:var(--t3);font-weight:400;text-transform:none">(auto)</span></label>
+        <input class="inp" id="inp-mapa" type="text" placeholder="Ex: 7111401" value="${previewData?.meta?.mapa||''}">
+      </div>
+      <div style="flex:1">
+        <label class="lbl">Data <span style="color:var(--t3);font-weight:400;text-transform:none">(auto)</span></label>
+        <input class="inp" id="inp-data" type="text" placeholder="DD/MM/AAAA" value="${previewData?.meta?.data||hoje()}">
+      </div>
+    </div>
+    <div id="carr-err"></div>
+    <button class="btn btn-primary btn-block" id="btn-processar" onclick="processarTXT()" disabled style="opacity:.4">🔍 Processar mapa</button>
+    <style>#dropzone.dz-drag{border-color:var(--blue);background:rgba(59,126,255,.06)}</style>`;
+  } else {
+    const p=previewData;
+    const tv=p.clientes.reduce((a,c)=>a+c.notas.reduce((b,n)=>b+(n.tipo==='bon'?0:n.valor),0),0);
+    const tnf=p.clientes.reduce((a,c)=>a+c.notas.length,0);
+    const rows=[['Mapa',p.meta.mapa||'—'],['Rota',p.meta.rota||'—'],['Vendedor',p.meta.vendedor||'—'],['Data',p.meta.data],['Clientes',p.clientes.length],['Total NFs',tnf],['Valor total',fmt(tv)]];
+    el.innerHTML=`<div class="card" style="margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">✅ Mapa identificado</div>
+      ${rows.map(([l,v])=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bdr);font-size:13px">
+        <span style="color:var(--t2)">${l}</span>
+        <span style="color:var(--t1);font-weight:700;font-family:${typeof v==='string'&&v.startsWith('R$')?'\'JetBrains Mono\',monospace':'inherit'}">${v}</span>
+      </div>`).join('')}
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-outline btn-sm" onclick="etapaCarr='form';renderCarregar()">← Editar</button>
+      <button class="btn btn-success btn-block" onclick="confirmarMapa()">✅ Iniciar acerto</button>
+    </div>`;
+  }
+}
+
+function lerArquivo(file){
+  if(!file) return;
+  if(!file.name.toLowerCase().endsWith('.txt')&&!file.type.includes('text')){
+    document.getElementById('carr-err').innerHTML='<div class="err">⚠️ Selecione um arquivo .txt</div>'; return;
+  }
+  const reader=new FileReader();
+  reader.onload=(e)=>{
+    txtCarregado=e.target.result;
+    document.getElementById('nome-arq-txt').textContent=file.name;
+    document.getElementById('tam-arq-txt').textContent=(file.size/1024).toFixed(1)+' KB';
+    document.getElementById('nome-arquivo').style.display='flex';
+    document.getElementById('dropzone').style.display='none';
+    const btn=document.getElementById('btn-processar');
+    btn.disabled=false; btn.style.opacity='1';
+    document.getElementById('carr-err').innerHTML='';
+    const m=txtCarregado.match(/mapa[:\s]+(\d+)/i);
+    const d=txtCarregado.match(/data[:\s]+(\d{2}\/\d{2}\/\d{2,4})/i);
+    if(m&&!document.getElementById('inp-mapa').value) document.getElementById('inp-mapa').value=m[1];
+    if(d&&!document.getElementById('inp-data').value) document.getElementById('inp-data').value=d[1];
+  };
+  reader.onerror=()=>{ document.getElementById('carr-err').innerHTML='<div class="err">⚠️ Erro ao ler o arquivo.</div>'; };
+  reader.readAsText(file,'UTF-8');
+}
+function limparArquivo(){
+  txtCarregado='';
+  document.getElementById('nome-arquivo').style.display='none';
+  document.getElementById('dropzone').style.display='block';
+  const btn=document.getElementById('btn-processar');
+  btn.disabled=true; btn.style.opacity='.4';
+  document.getElementById('inp-file').value='';
+}
+function processarTXT(){
+  const txt=txtCarregado;
+  const mapa=document.getElementById('inp-mapa').value.trim();
+  const data=document.getElementById('inp-data').value.trim();
+  const errEl=document.getElementById('carr-err');
+  if(!txt.trim()){ errEl.innerHTML='<div class="err">⚠️ Selecione o arquivo .txt.</div>'; return; }
+  try{
+    const parsed=parseTXT(txt);
+    if(!parsed.clientes.length){ errEl.innerHTML='<div class="err">⚠️ Nenhum cliente encontrado.</div>'; return; }
+    if(mapa) parsed.meta.mapa=mapa;
+    if(data) parsed.meta.data=data;
+    if(!parsed.meta.mapa) parsed.meta.mapa=mapa||'SEM MAPA';
+    previewData=parsed; etapaCarr='preview'; renderCarregar();
+  }catch(e){ errEl.innerHTML=`<div class="err">⚠️ Erro: ${e.message}</div>`; }
+}
+function confirmarMapa(){
+  if(!previewData) return;
+  if(mapaAtivo){ mapaAtivo.arquivadoEm=agora()+' '+hoje(); historico=[mapaAtivo,...historico].slice(0,10); salvarHist(); }
+  mapaAtivo={...previewData, id:previewData.meta.mapa+'_'+Date.now(), criadoEm:agora()+' '+hoje()};
+  selecao.clear(); salvar(); previewData=null; etapaCarr='form';
+  toast('✅ Mapa carregado!'); ir('s-lista');
+}
+
+/* ══ LISTA DE CLIENTES ══ */
+function totalSelecionado(){
+  let t=0;
+  mapaAtivo.clientes.forEach(cl=>{
+    cl.notas.forEach(n=>{
+      if(!selecao.has(n.id)||n.tipo==='bon') return;
+      const dv=(n.devolucoes||[]).reduce((a,d)=>a+d.qtd*d.valorUnit,0);
+      t+=Math.max(0,n.valor-dv);
+    });
+  });
+  return t;
+}
+
+function renderLista(){
+  if(!mapaAtivo){ ir('s-home'); return; }
+  const c=mapaAtivo;
+  document.getElementById('lista-brand').textContent='Mapa '+c.meta.mapa;
+  document.getElementById('lista-title').textContent=c.meta.rota||c.meta.vendedor||'Rota';
+
+  const totalNFs=c.clientes.reduce((a,cl)=>a+cl.notas.filter(n=>n.tipo!=='bon').length,0);
+  const acNFs   =c.clientes.reduce((a,cl)=>a+cl.notas.filter(n=>n.acertada&&n.tipo!=='bon').length,0);
+  const pct     =totalNFs>0?Math.round(acNFs/totalNFs*100):0;
+  const conc    =c.clientes.filter(cl=>statusCliente(cl.notas)==='concluido').length;
+  const tv      =c.clientes.reduce((a,cl)=>a+cl.notas.reduce((b,n)=>b+(n.tipo==='bon'?0:n.valor),0),0);
+
+  let html=`<div class="card" style="margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+      <span style="font-size:12px;color:var(--t2)">${conc} de ${c.clientes.length} clientes concluídos</span>
+      <span style="font-size:12px;font-weight:700;color:var(--green)">${pct}%</span>
+    </div>
+    <div class="prog-wrap"><div class="prog-fill" style="width:${pct}%"></div></div>
+  </div>
+  <div style="margin-bottom:12px">
+    <input class="inp" id="busca-cli" oninput="filtrarClientes()" placeholder="🔍 Buscar cliente..." style="height:42px">
+  </div>
+  <div style="font-size:12px;color:var(--t3);margin-bottom:12px;background:rgba(59,126,255,.07);border:1px solid rgba(59,126,255,.2);border-radius:var(--rs);padding:10px 12px">
+    💡 Toque em um cliente para ver as notas · Marque as que vai acertar · Toque em <strong style="color:var(--blue)">ACERTAR</strong>
+  </div>
+  <div id="lista-cards">`;
+
+  c.clientes.forEach((cl,idx)=>{
+    const st =statusCliente(cl.notas);
+    const val=cl.notas.reduce((a,n)=>a+(n.tipo==='bon'?0:n.valor),0);
+    const ico=st==='concluido'?'✅':st==='parcial'?'🟡':'📦';
+    const temPend=cl.notas.some(n=>n.tipo!=='bon'&&!n.acertada);
+
+    html+=`<div class="cli-card ${st==='concluido'?'done':''}" id="cli-card-${idx}">
+      <div class="cli-card-header" onclick="toggleCliCard(${idx})">
+        <span style="font-size:26px;flex-shrink:0">${ico}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cl.nome}</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:2px">${cl.notas.length} nota(s) · Rota ${cl.rota}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div class="mono" style="font-size:15px;color:${st==='concluido'?'var(--green)':'var(--t1)'}">${fmt(val)}</div>
+          <div style="margin-top:4px"><span class="badge badge-${st}">${st}</span></div>
+        </div>
+      </div>
+      <div class="cli-notas ${temPend?'open':''}" id="notas-cli-${idx}">`;
+
+    cl.notas.forEach(n=>{
+      const isBon=n.tipo==='bon';
+      const jaAc =n.acertada&&!isBon;
+      const isSel=selecao.has(n.id);
+      const dv   =(n.devolucoes||[]).reduce((a,d)=>a+d.qtd*d.valorUnit,0);
+      const liq  =Math.max(0,n.valor-dv);
+
+      if(isBon){
+        html+=`<div class="nf-sel-row bon">
+          <span style="font-size:18px">☑️</span>
+          <div style="flex:1">
+            <span class="mono" style="font-size:13px;color:var(--t3)">NF ${n.nf}</span>
+            <span style="font-size:10px;font-weight:700;color:var(--purple);background:rgba(167,139,250,.12);padding:2px 7px;border-radius:20px;margin-left:6px">BONIF</span>
+          </div>
+          <span style="font-size:12px;color:var(--t3)">Grátis</span>
+        </div>`;
+      } else if(jaAc){
+        const pStr=(n.pagamentos||[]).map(p=>`${icoPagto(p.forma)} ${p.forma} ${fmt(p.valor)}`).join(' + ');
+        html+=`<div class="nf-sel-row" style="cursor:pointer" onclick="reabrirLote('${n.loteId||''}','${n.id}')">
+          <span style="font-size:18px">✅</span>
+          <div style="flex:1;min-width:0">
+            <span class="mono" style="font-size:13px;color:var(--t2)">NF ${n.nf}</span>
+            <div style="font-size:11px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${pStr}</div>
+          </div>
+          <span style="font-size:11px;color:var(--blue);flex-shrink:0;margin-left:8px">✏️ editar</span>
+        </div>`;
+      } else {
+        html+=`<div class="nf-sel-row ${isSel?'selected':''}" id="nfrow-${n.id}" onclick="toggleNFSel('${n.id}')">
+          <input type="checkbox" class="nf-check" ${isSel?'checked':''} onclick="event.stopPropagation();toggleNFSel('${n.id}')">
+          <div style="flex:1">
+            <span class="mono" style="font-size:14px;font-weight:700;color:var(--t1)">NF ${n.nf}</span>
+            <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:2px 7px;border-radius:20px;background:rgba(94,100,130,.15);color:var(--t3);margin-left:6px">${n.tipo}</span>
+            ${dv>0?`<span style="font-size:10px;color:var(--red);margin-left:4px">-dev</span>`:''}
+          </div>
+          <span class="mono" style="font-size:14px;font-weight:800;color:${dv>0?'var(--amber)':'var(--t1)'};">${fmt(liq)}</span>
+        </div>`;
+      }
+    });
+
+    html+=`</div></div>`;
+  });
+
+  html+='</div>';
+  document.getElementById('lista-content').innerHTML=html;
+  atualizarBarraLista();
+}
+
+function toggleCliCard(idx){
+  const el=document.getElementById('notas-cli-'+idx);
+  if(el) el.classList.toggle('open');
+}
+
+function toggleNFSel(id){
+  if(selecao.has(id)) selecao.delete(id);
+  else selecao.add(id);
+  const row=document.getElementById('nfrow-'+id);
+  if(row){
+    const cb=row.querySelector('.nf-check');
+    if(selecao.has(id)){ row.classList.add('selected'); if(cb) cb.checked=true; }
+    else               { row.classList.remove('selected'); if(cb) cb.checked=false; }
+  }
+  atualizarBarraLista();
+}
+
+function atualizarBarraLista(){
+  const nSel=selecao.size;
+  const tSel=totalSelecionado();
+  const tv  =mapaAtivo.clientes.reduce((a,cl)=>a+cl.notas.reduce((b,n)=>b+(n.tipo==='bon'?0:n.valor),0),0);
+  const pct =calcProg(mapaAtivo);
+  const inner=document.getElementById('lista-bar-inner');
+  if(!inner) return;
+  if(nSel>0){
+    inner.innerHTML=`
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--t3)">${nSel} nota(s) marcada(s)</div>
+        <div class="mono" style="font-size:20px;font-weight:800;color:var(--t1)">${fmt(tSel)}</div>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="limparSelecao()" style="flex-shrink:0;border-color:rgba(255,79,79,.4);color:var(--red)">✕</button>
+      <button class="btn btn-primary" onclick="abrirAcerto()" style="flex-shrink:0;min-width:110px">💳 Acertar</button>`;
+  } else {
+    inner.innerHTML=`
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--t3);margin-bottom:2px">Total da rota</div>
+        <div class="mono" style="font-size:18px;color:var(--green)">${fmt(tv)}</div>
+      </div>
+      <button class="btn ${pct===100?'btn-success':'btn-outline'}" onclick="ir('s-fech')">
+        ${pct===100?'✅ Fechar rota':'📋 Ver resumo'}
+      </button>`;
+  }
+}
+
+function limparSelecao(){ selecao.clear(); renderLista(); }
+function filtrarClientes(){
+  const busca=document.getElementById('busca-cli')?.value.toLowerCase()||'';
+  document.querySelectorAll('#lista-cards .cli-card').forEach(card=>{
+    const nome=card.querySelector('.cli-card-header div div')?.textContent.toLowerCase()||'';
+    card.style.display=nome.includes(busca)?'':'none';
+  });
+}
+
+/* ══ ACERTO DE LOTE ══ */
+function abrirAcerto(){
+  if(selecao.size===0){ toast('⚠️ Selecione ao menos uma nota'); return; }
+  parcelas=[]; formaAtual=null; devAberto=null; loteReaberto=null;
+  ir('s-acerto');
+}
+
+/* Reabre todas as NFs do lote para edição */
+function reabrirLote(loteId, nfIdClicada){
+  // Coleta todas as NFs com o mesmo loteId
+  const ids = [];
+  mapaAtivo.clientes.forEach(cl=>{
+    cl.notas.forEach(n=>{
+      if(loteId && n.loteId===loteId) ids.push(n.id);
+    });
+  });
+  // Fallback: se não tiver loteId (acertos antigos), reabre só a nota clicada
+  if(!ids.length) ids.push(nfIdClicada);
+
+  // Reconstitui as parcelas somando os pagamentos de todas as NFs do lote por forma
+  const somaFormas = {};
+  mapaAtivo.clientes.forEach(cl=>{
+    cl.notas.forEach(n=>{
+      if(!ids.includes(n.id)) return;
+      (n.pagamentos||[]).forEach(p=>{
+        if(p.forma==='bonificacao') return;
+        somaFormas[p.forma] = (somaFormas[p.forma]||0) + p.valor;
+      });
+    });
+  });
+  parcelas = Object.entries(somaFormas).map(([forma,valor])=>({forma, valor:Math.round(valor*100)/100}));
+
+  // Popula a seleção com essas NFs
+  selecao = new Set(ids);
+  formaAtual = null;
+  devAberto = null;
+  loteReaberto = loteId || null;
+  ir('s-acerto');
+}
+
+/* Desfaz o acerto de todas as NFs do lote atual */
+function desfazerAcerto(){
+  const lote = nfsSelecionadas();
+  lote.forEach(({nota:n})=>{
+    n.acertada = false;
+    n.pagamentos = [];
+    n.loteId = null;
+  });
+  selecao.clear(); loteReaberto=null; salvar();
+  toast('↩️ Acerto desfeito');
+  ir('s-lista');
+}
+
+function nfsSelecionadas(){
+  const lista=[];
+  mapaAtivo.clientes.forEach(cl=>{
+    cl.notas.forEach(n=>{ if(selecao.has(n.id)) lista.push({cliNome:cl.nome,nota:n}); });
+  });
+  return lista;
+}
+function totalLote(){
+  return nfsSelecionadas().reduce((a,{nota:n})=>{
+    const dv=(n.devolucoes||[]).reduce((x,d)=>x+d.qtd*d.valorUnit,0);
+    return a+Math.max(0,n.valor-dv);
+  },0);
+}
+function totalParcelas(){ return parcelas.reduce((a,p)=>a+p.valor,0); }
+
+function voltarParaLista(){ ir('s-lista'); }
+
+function renderAcerto(){
+  const lote=nfsSelecionadas();
+  if(!lote.length){ ir('s-lista'); return; }
+  const tLote=totalLote();
+  const tParc=totalParcelas();
+  const resto=Math.round((tLote-tParc)*100)/100;
+  document.getElementById('acerto-titulo').textContent=`${lote.length} nota(s)`;
+
+  /* ── lista das NFs ── */
+  let htmlNFs='';
+  lote.forEach(({cliNome,nota:n})=>{
+    const dv=(n.devolucoes||[]).reduce((a,d)=>a+d.qtd*d.valorUnit,0);
+    const liq=Math.max(0,n.valor-dv);
+    htmlNFs+=`<div style="background:var(--bg3);border-radius:var(--rs);padding:10px 14px;margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <span class="mono" style="font-size:14px;font-weight:700;color:var(--t1)">NF ${n.nf}</span>
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;padding:2px 7px;border-radius:20px;background:rgba(94,100,130,.15);color:var(--t3);margin-left:6px">${n.tipo}</span>
+          <div style="font-size:11px;color:var(--t3);margin-top:3px">${cliNome}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="mono" style="font-size:15px;font-weight:800;color:${dv>0?'var(--amber)':'var(--t1)'}">${fmt(liq)}</div>
+          ${dv>0?`<div class="mono" style="font-size:10px;color:var(--red);text-decoration:line-through">${fmt(n.valor)}</div>`:''}
+        </div>
+      </div>`;
+
+    if((n.devolucoes||[]).length){
+      htmlNFs+=`<div class="dev-list">`;
+      n.devolucoes.forEach((d,di)=>{
+        htmlNFs+=`<div class="dev-item">
+          <span>${d.produto} × ${d.qtd} = ${fmt(d.qtd*d.valorUnit)}</span>
+          <button class="rem-dev" onclick="removerDevLote('${n.id}',${di})">×</button>
+        </div>`;
+      });
+      htmlNFs+=`</div>`;
+    }
+
+    if(devAberto===n.id){
+      htmlNFs+=`<div class="dev-form">
+        <label class="lbl">Produto</label>
+        <input class="inp" id="dp-prod" placeholder="Nome do produto" style="margin-bottom:8px">
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <div style="flex:1"><label class="lbl">Qtd</label><input class="inp" id="dp-qtd" type="number" min="1" placeholder="0"></div>
+          <div style="flex:1"><label class="lbl">Valor Unit.</label><input class="inp" id="dp-val" placeholder="0,00"></div>
+        </div>
+        <div id="dev-err" style="color:var(--red);font-size:12px;margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-outline btn-sm" onclick="devAberto=null;renderAcerto()">Cancelar</button>
+          <button class="btn btn-danger btn-block btn-sm" onclick="confirmarDevLote('${n.id}')">Confirmar</button>
+        </div>
+      </div>`;
+    } else {
+      htmlNFs+=`<button onclick="devAberto='${n.id}';renderAcerto()" style="margin-top:8px;background:none;border:1px solid var(--bdr2);border-radius:6px;padding:5px 12px;color:var(--t3);font-size:12px;cursor:pointer;font-family:inherit">+ Devolução</button>`;
+    }
+    htmlNFs+=`</div>`;
+  });
+
+  /* ── painel de pagamento ── */
+  let htmlPag=`<div class="divider"></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <span style="font-size:13px;color:var(--t2)">Total a receber</span>
+    <span class="mono" style="font-size:20px;font-weight:800;color:var(--t1)">${fmt(tLote)}</span>
+  </div>`;
+
+  if(parcelas.length){
+    parcelas.forEach((p,pi)=>{
+      const isPix = p.forma==='pix';
+      const temArq = isPix && p.arquivoNome;
+      const jaEnviou = isPix && p.comprovanteEnviado;
+      const confirmou = isPix && p.comprovanteConfirmado;
+      const corBorda = !isPix?'transparent': confirmou?'rgba(34,212,122,.3)':temArq?'rgba(59,126,255,.3)':'rgba(245,166,35,.4)';
+
+      htmlPag+=`<div style="background:var(--bg3);border:1px solid ${corBorda};border-radius:var(--rs);padding:10px 12px;margin-bottom:8px">
+        <!-- linha principal -->
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:20px">${icoPagto(p.forma)}</span>
+          <span style="font-size:13px;font-weight:700;color:var(--t1);flex:1">${p.forma.charAt(0).toUpperCase()+p.forma.slice(1)}</span>
+          <span class="parcela-val">${fmt(p.valor)}</span>
+          <button class="rem-parcela" onclick="removerParcela(${pi})">×</button>
+        </div>`;
+
+      /* bloco comprovante Pix */
+      if(isPix){
+        if(!temArq){
+          /* ainda sem arquivo — mostra botão de anexar */
+          htmlPag+=`
+          <div style="margin-top:10px">
+            <input type="file" id="inp-comp-${pi}" accept="image/*,application/pdf" capture="environment" style="display:none"
+              onchange="anexarComprovante(${pi},this)">
+            <button class="btn btn-outline btn-block btn-sm" onclick="document.getElementById('inp-comp-${pi}').click()" style="border-color:var(--amber);color:var(--amber)">
+              📎 Anexar comprovante (obrigatório)
+            </button>
+          </div>`;
+        } else {
+          /* arquivo selecionado — mostra miniatura e botão WhatsApp */
+          htmlPag+=`
+          <div style="margin-top:10px;display:flex;align-items:center;gap:10px;background:var(--bg2);border-radius:var(--rs);padding:8px 10px">
+            ${p.arquivoTipo&&p.arquivoTipo.startsWith('image/')
+              ? `<img src="${p.arquivoDataUrl}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0">`
+              : `<span style="font-size:32px;flex-shrink:0">📄</span>`}
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;color:var(--t1);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.arquivoNome}</div>
+              <div style="font-size:11px;color:var(--t3);margin-top:1px">${p.arquivoTamanho||''}</div>
+            </div>
+            <button onclick="document.getElementById('inp-comp2-${pi}').click()" style="background:none;border:none;color:var(--t3);font-size:11px;cursor:pointer;font-family:inherit;flex-shrink:0">trocar</button>
+            <input type="file" id="inp-comp2-${pi}" accept="image/*,application/pdf" capture="environment" style="display:none"
+              onchange="anexarComprovante(${pi},this)">
+          </div>`;
+
+          if(!jaEnviou){
+            htmlPag+=`
+            <button class="btn btn-primary btn-block" style="margin-top:8px" onclick="abrirWhatsAppComprovante(${pi})">
+              📤 Enviar comprovante via WhatsApp
+            </button>`;
+          } else if(!confirmou){
+            htmlPag+=`
+            <div style="margin-top:8px;background:rgba(59,126,255,.1);border:1px solid rgba(59,126,255,.25);border-radius:var(--rs);padding:10px 12px;display:flex;align-items:center;gap:12px">
+              <input type="checkbox" id="conf-${pi}" style="width:24px;height:24px;accent-color:var(--green);cursor:pointer;flex-shrink:0"
+                onchange="confirmarEnvioComprovante(${pi},this.checked)">
+              <label for="conf-${pi}" style="font-size:13px;color:var(--t2);cursor:pointer">
+                Confirmei o envio do comprovante no WhatsApp
+              </label>
+            </div>`;
+          } else {
+            htmlPag+=`<div style="margin-top:8px;font-size:12px;color:var(--green);font-weight:700">✅ Comprovante confirmado</div>`;
+          }
+        }
+      }
+
+      htmlPag+=`</div>`;
+    });
+
+    const corResto=Math.abs(resto)<0.01?'var(--green)':resto<0?'var(--red)':'var(--amber)';
+    htmlPag+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding:10px 12px;background:var(--bg3);border-radius:var(--rs)">
+      <span style="font-size:13px;color:var(--t2)">${resto<-0.01?'⚠️ Excesso':'Restante a lançar'}</span>
+      <span class="mono" style="font-size:16px;font-weight:800;color:${corResto}">${fmt(Math.abs(resto))}</span>
+    </div>`;
+  }
+
+  if(resto>0.005){
+    htmlPag+=`<div style="font-size:12px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">
+      ${parcelas.length>0?'+ Outra forma de pagamento':'Forma de pagamento'}
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:12px">
+      ${['dinheiro','pix','boleto','pendente'].map(f=>`
+      <button class="forma-btn ${formaAtual===f?'ativo':''}" onclick="setFormaAtual('${f}')">
+        <span style="font-size:20px">${icoPagto(f)}</span>
+        <span>${f.charAt(0).toUpperCase()+f.slice(1)}</span>
+      </button>`).join('')}
+    </div>`;
+
+    if(formaAtual){
+      htmlPag+=`<div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:6px">
+        <div style="flex:1">
+          <label class="lbl">Valor ${formaAtual} (R$)</label>
+          <input class="inp mono" id="inp-parcela-val" type="number" step="0.01" value="${resto.toFixed(2)}"
+            style="font-size:18px;font-weight:700">
+        </div>
+        <button class="btn btn-primary" style="flex-shrink:0" onclick="adicionarParcela()">+ Lançar</button>
+      </div>`;
+    }
+  }
+
+  htmlPag+=`<div id="acerto-err" style="color:var(--red);font-size:13px;margin-top:6px"></div>`;
+  document.getElementById('acerto-content').innerHTML=htmlNFs+htmlPag;
+
+  const pixSemComp = parcelas.some(p=>p.forma==='pix'&&!p.comprovanteConfirmado);
+  const pronto=Math.abs(resto)<0.01&&parcelas.length>0&&!pixSemComp;
+  const rodape = loteReaberto
+    ? `<button class="btn btn-danger btn-sm" onclick="desfazerAcerto()" style="flex-shrink:0">↩️ Desfazer</button>
+       <button class="btn btn-success btn-block" onclick="confirmarAcerto()" ${pronto?'':'disabled style="opacity:.4;cursor:not-allowed"'}>
+         ✅ Salvar alteração
+       </button>`
+    : `<button class="btn btn-outline btn-sm" onclick="voltarParaLista()" style="flex-shrink:0">← Voltar</button>
+       <button class="btn btn-success btn-block" onclick="confirmarAcerto()" ${pronto?'':'disabled style="opacity:.4;cursor:not-allowed"'}>
+         ✅ Confirmar acerto
+       </button>`;
+  document.getElementById('acerto-bar').innerHTML=rodape;
+}
+
+function setFormaAtual(f){
+  formaAtual=f; renderAcerto();
+  setTimeout(()=>{ const el=document.getElementById('inp-parcela-val'); if(el){el.focus();el.select();} },60);
+}
+function adicionarParcela(){
+  const v=parseFloat(document.getElementById('inp-parcela-val')?.value)||0;
+  if(v<=0){ document.getElementById('acerto-err').textContent='⚠️ Digite um valor válido'; return; }
+  parcelas.push({forma:formaAtual,valor:Math.round(v*100)/100});
+  formaAtual=null; renderAcerto();
+}
+function removerParcela(pi){ parcelas.splice(pi,1); renderAcerto(); }
+
+/* ── Comprovante Pix ── */
+
+/* Chave única por parcela no IndexedDB */
+function chaveComp(pi){ return `comp_${mapaAtivo?.id||'x'}_${pi}`; }
+
+/* Chamado quando o input file muda — salva no IndexedDB */
+function anexarComprovante(pi, input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    const dataUrl = e.target.result;
+    salvarFoto(chaveComp(pi), dataUrl).then(()=>{
+      parcelas[pi].arquivoNome           = file.name;
+      parcelas[pi].arquivoTipo           = file.type;
+      parcelas[pi].arquivoTamanho        = (file.size/1024).toFixed(0)+' KB';
+      parcelas[pi].arquivoChave          = chaveComp(pi); // referência no IndexedDB
+      parcelas[pi].arquivoDataUrl        = dataUrl;       // cache em memória p/ miniatura
+      parcelas[pi].comprovanteEnviado    = false;
+      parcelas[pi].comprovanteConfirmado = false;
+      renderAcerto();
+    });
+  };
+  reader.readAsDataURL(file);
+}
+
+/* Abre WhatsApp com a legenda automática */
+function abrirWhatsAppComprovante(pi){
+  const p = parcelas[pi];
+  if(!p) return;
+  const lote = nfsSelecionadas();
+  const nfsStr = lote.map(({cliNome,nota:n})=>`NF ${n.nf} · ${cliNome}`).join('\n');
+  const legenda = `🧾 *Comprovante Pix*\n*Mapa:* ${mapaAtivo.meta.mapa}\n*Valor:* ${fmt(p.valor)}\n\n${nfsStr}\n\n_Anexe o comprovante a esta mensagem._`;
+  window.open('https://wa.me/?text='+encodeURIComponent(legenda),'_blank');
+  parcelas[pi].comprovanteEnviado = true;
+  renderAcerto();
+}
+
+/* Checkbox de confirmação manual */
+function confirmarEnvioComprovante(pi, checked){
+  parcelas[pi].comprovanteConfirmado = checked;
+  /* atualiza só o botão sem re-render completo para não perder o estado do checkbox */
+  const pixSemComp = parcelas.some(p=>p.forma==='pix'&&!p.comprovanteConfirmado);
+  const resto = Math.round((totalLote()-totalParcelas())*100)/100;
+  const pronto = Math.abs(resto)<0.01 && parcelas.length>0 && !pixSemComp;
+  const bar = document.getElementById('acerto-bar');
+  if(bar){
+    const btn = bar.querySelector('button:last-child');
+    if(btn){
+      btn.disabled = !pronto;
+      btn.style.opacity = pronto?'1':'.4';
+      btn.style.cursor  = pronto?'pointer':'not-allowed';
+    }
+  }
+}
+
+function removerDevLote(nfId,di){
+  mapaAtivo.clientes.forEach(cl=>{ const n=cl.notas.find(x=>x.id===nfId); if(n) n.devolucoes.splice(di,1); });
+  salvar(); renderAcerto();
+}
+function confirmarDevLote(nfId){
+  const prod=document.getElementById('dp-prod')?.value.trim();
+  const qtd =parseFloat(document.getElementById('dp-qtd')?.value)||0;
+  const val =parseBRL(document.getElementById('dp-val')?.value);
+  const errEl=document.getElementById('dev-err');
+  if(!prod||qtd<=0||val<=0){ if(errEl) errEl.textContent='Preencha todos os campos.'; return; }
+  mapaAtivo.clientes.forEach(cl=>{
+    const n=cl.notas.find(x=>x.id===nfId);
+    if(n){ if(!n.devolucoes) n.devolucoes=[]; n.devolucoes.push({produto:prod,qtd,valorUnit:val}); }
+  });
+  salvar(); devAberto=null; renderAcerto();
+}
+
+function confirmarAcerto(){
+  if(parcelas.length===0){ document.getElementById('acerto-err').textContent='⚠️ Lance ao menos uma forma de pagamento'; return; }
+  const resto=Math.round((totalLote()-totalParcelas())*100)/100;
+  if(Math.abs(resto)>=0.01){ document.getElementById('acerto-err').textContent=`⚠️ Faltam ${fmt(resto)} para fechar o total`; return; }
+  const pixSemComp=parcelas.some(p=>p.forma==='pix'&&!p.comprovanteConfirmado);
+  if(pixSemComp){ document.getElementById('acerto-err').textContent='⚠️ Confirme o envio do comprovante Pix antes de prosseguir'; return; }
+  const lote=nfsSelecionadas();
+  const tLote=totalLote();
+  const novoLoteId = loteReaberto || uid(); // reutiliza o loteId se for reaberto
+  lote.forEach(({nota:n})=>{
+    const dv=(n.devolucoes||[]).reduce((a,d)=>a+d.qtd*d.valorUnit,0);
+    const liqNF=Math.max(0,n.valor-dv);
+    const frac=tLote>0?liqNF/tLote:1/lote.length;
+    n.pagamentos=parcelas.map(p=>({forma:p.forma,valor:Math.round(p.valor*frac*100)/100}));
+    n.acertada=true;
+    n.loteId=novoLoteId;
+  });
+  selecao.clear(); loteReaberto=null; salvar();
+  toast(`✅ ${lote.length} nota(s) acertada(s)!`);
+  ir('s-lista');
+}
+
+/* ══ FECHAMENTO ══ */
+function calcTotais(carga){
+  let din=0,pix=0,bol=0,pen=0,dev=0;
+  carga.clientes.forEach(cl=>{
+    cl.notas.forEach(n=>{
+      if(n.tipo==='bon') return;
+      const dv=(n.devolucoes||[]).reduce((a,d)=>a+d.qtd*d.valorUnit,0);
+      dev+=dv;
+      if(!n.acertada) return;
+      (n.pagamentos||[]).forEach(p=>{
+        if(p.forma==='dinheiro') din+=p.valor;
+        else if(p.forma==='pix')     pix+=p.valor;
+        else if(p.forma==='boleto')  bol+=p.valor;
+        else if(p.forma==='pendente') pen+=p.valor;
+      });
+    });
+  });
+  return {din,pix,bol,pen,dev,total:din+pix+bol};
+}
+
+function renderFech(carga){
+  const c=carga||mapaAtivo; if(!c) return;
+  const isHist=!!carga;
+  const t=calcTotais(c);
+  const conc=c.clientes.filter(cl=>statusCliente(cl.notas)==='concluido').length;
+  const brandEl=document.getElementById(isHist?'hist-brand':'fech-brand');
+  if(brandEl) brandEl.textContent='Mapa '+c.meta.mapa;
+
+  let html=`<div class="fech-total">
+    <div>
+      <div class="fl">Total Recebido</div>
+      <div class="fv">${fmt(t.total)}</div>
+      <div style="font-size:11px;color:var(--green);margin-top:4px;opacity:.7">${conc} de ${c.clientes.length} clientes concluídos</div>
+    </div>
+  </div>
+  <div class="card" style="padding:8px 16px;margin-bottom:16px">
+    ${[['💵 Dinheiro',t.din,'var(--green)'],['📲 Pix',t.pix,'var(--green)'],['📄 Boleto',t.bol,'var(--t1)'],['⏳ Pendente',t.pen,'var(--amber)'],['↩️ Devoluções',-t.dev,'var(--red)']].map(([l,v,col])=>`
+    <div class="frow"><span class="fl2">${l}</span><span class="fv2" style="color:${col}">${v<0?'−':''}${fmt(Math.abs(v))}</span></div>`).join('')}
+  </div>
+  <div style="font-size:12px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">Detalhamento por cliente</div>`;
+
+  c.clientes.forEach(cl=>{
+    const reais=cl.notas.filter(n=>n.tipo!=='bon');
+    if(!reais.length) return;
+    const st=statusCliente(cl.notas);
+    html+=`<div class="card" style="padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:13px;font-weight:700;color:var(--t1)">${cl.nome}</span>
+        <span class="badge badge-${st}">${st}</span>
+      </div>`;
+    reais.forEach(n=>{
+      const dv=(n.devolucoes||[]).reduce((a,d)=>a+d.qtd*d.valorUnit,0);
+      const liq=Math.max(0,n.valor-dv);
+      const pagStr=(n.pagamentos||[]).filter(p=>p.forma!=='bonificacao').map(p=>`${icoPagto(p.forma)} ${p.forma} ${fmt(p.valor)}`).join(' + ')||(n.acertada?'—':'não acertada');
+      html+=`<div style="padding:5px 0;border-bottom:1px solid var(--bdr);font-size:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="color:var(--t2)">NF ${n.nf}</span>
+          <span class="mono" style="font-size:12px;color:${n.acertada?'var(--t1)':'var(--t3)'}">${fmt(liq)}</span>
+        </div>
+        ${n.acertada?`<div style="color:var(--t3);font-size:11px;margin-top:1px">${pagStr}</div>`:''}
+      </div>`;
+    });
+    html+=`</div>`;
+  });
+
+  const tc=isHist?'hist-content':'fech-content';
+  const tb=isHist?'hist-bar':'fech-bar';
+  document.getElementById(tc).innerHTML=html;
+  document.getElementById(tb).innerHTML=`
+    <button class="btn btn-outline btn-sm btn-block" onclick="copiarResumo(${isHist?'true':''})">📋 Copiar</button>
+    <button class="btn btn-success btn-sm btn-block" onclick="enviarWA(${isHist?'true':''})">📱 WhatsApp</button>`;
+}
+function renderHist(){ if(!histView) return; renderFech(histView); }
+
+function gerarTexto(carga){
+  const c=carga||mapaAtivo; if(!c) return '';
+  const t=calcTotais(c);
+  let txt=`*ACERTO DE CARGA — MIRAI*\n`;
+  txt+=`*Mapa:* ${c.meta.mapa}  *Rota:* ${c.meta.rota||'—'}\n`;
+  txt+=`*Data:* ${c.meta.data}  ${agora()}\n\n`;
+  txt+=`💵 Dinheiro:    ${fmt(t.din)}\n`;
+  txt+=`📲 Pix:          ${fmt(t.pix)}\n`;
+  txt+=`📄 Boleto:      ${fmt(t.bol)}\n`;
+  txt+=`⏳ Pendente:  ${fmt(t.pen)}\n`;
+  txt+=`↩️ Devoluções: −${fmt(t.dev)}\n`;
+  txt+=`\n✅ *TOTAL: ${fmt(t.total)}*\n\n────────────────\n`;
+  c.clientes.forEach(cl=>{
+    const reais=cl.notas.filter(n=>n.tipo!=='bon'&&n.acertada);
+    if(!reais.length) return;
+    txt+=`\n*${cl.nome}*\n`;
+    reais.forEach(n=>{
+      const dv=(n.devolucoes||[]).reduce((a,d)=>a+d.qtd*d.valorUnit,0);
+      const liq=Math.max(0,n.valor-dv);
+      const pagStr=(n.pagamentos||[]).filter(p=>p.forma!=='bonificacao').map(p=>`${p.forma} ${fmt(p.valor)}`).join(' + ')||'—';
+      txt+=`  NF ${n.nf} · ${pagStr} · ${fmt(liq)}\n`;
+    });
+  });
+  return txt;
+}
+function copiarResumo(isHist){
+  const c=isHist?histView:mapaAtivo;
+  navigator.clipboard.writeText(gerarTexto(c)).then(()=>toast('✅ Copiado!')).catch(()=>toast('⚠️ Não foi possível copiar'));
+}
+function enviarWA(isHist){
+  const c=isHist?histView:mapaAtivo;
+  window.open('https://wa.me/?text='+encodeURIComponent(gerarTexto(c)),'_blank');
+}
+function verHist(i){
+  histView=historico[i];
+  document.getElementById('hist-brand').textContent='Mapa '+(histView?.meta?.mapa||'');
+  ir('s-hist');
+}
+
+/* ══ PWA — Service Worker ══ */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./service-worker.js')
+      .then(()=>console.log('[SW] registrado'))
+      .catch(err=>console.warn('[SW] erro:', err));
+  });
+}
+
+/* ══ IndexedDB — armazenamento de fotos/comprovantes ══
+   Substitui base64 no localStorage (sem limite de tamanho)
+   DB: acerto_db  |  Store: comprovantes  |  Key: loteId_parcelaIdx
+══════════════════════════════════════════════════════ */
+let db = null;
+function abrirDB(){
+  return new Promise((resolve, reject)=>{
+    if(db){ resolve(db); return; }
+    const req = indexedDB.open('acerto_db', 1);
+    req.onupgradeneeded = (e)=>{
+      e.target.result.createObjectStore('comprovantes');
+    };
+    req.onsuccess = (e)=>{ db=e.target.result; resolve(db); };
+    req.onerror   = ()=>reject(req.error);
+  });
+}
+function salvarFoto(chave, dataUrl){
+  return abrirDB().then(d=>{
+    return new Promise((resolve,reject)=>{
+      const tx  = d.transaction('comprovantes','readwrite');
+      const req = tx.objectStore('comprovantes').put(dataUrl, chave);
+      req.onsuccess = ()=>resolve();
+      req.onerror   = ()=>reject(req.error);
+    });
+  });
+}
+function carregarFoto(chave){
+  return abrirDB().then(d=>{
+    return new Promise((resolve,reject)=>{
+      const tx  = d.transaction('comprovantes','readonly');
+      const req = tx.objectStore('comprovantes').get(chave);
+      req.onsuccess = ()=>resolve(req.result||null);
+      req.onerror   = ()=>reject(req.error);
+    });
+  });
+}
+function deletarFoto(chave){
+  return abrirDB().then(d=>{
+    return new Promise((resolve)=>{
+      const tx = d.transaction('comprovantes','readwrite');
+      tx.objectStore('comprovantes').delete(chave);
+      tx.oncomplete = ()=>resolve();
+    });
+  });
+}
+
+/* ══ INIT ══ */
+const origIr=ir;
+window.ir=function(id){ origIr(id); if(id==='s-carregar'){ etapaCarr='form'; txtCarregado=''; renderCarregar(); } };
+renderHome();
+</script>
+</body>
+</html>
