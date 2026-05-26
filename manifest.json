@@ -2,7 +2,7 @@
   "name": "Acerto Motorista",
   "short_name": "Acerto",
   "description": "Gestão de entregas e acerto de carga — Comercial Bebidas Mirai",
-  "start_url": "./app_motorista.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0a1a0f",
