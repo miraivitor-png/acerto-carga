@@ -12,7 +12,6 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-title" content="Acerto Motorista">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
@@ -1187,6 +1186,19 @@ async function gerarPDF(isHist){
   if(!c){ toast('⚠️ Nenhuma carga'); return; }
   toast('⏳ Gerando PDF...',5000);
 
+  try{
+  /* Carregar jsPDF sob demanda se ainda não carregou */
+  if(!window.jspdf){
+    await new Promise((resolve, reject)=>{
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
+      s.onload = resolve;
+      s.onerror = ()=>reject(new Error('Falha ao carregar jsPDF'));
+      document.head.appendChild(s);
+    });
+  }
+  if(!window.jspdf){ toast('⚠️ Erro: biblioteca PDF não carregou',3000); return; }
+
   const {jsPDF} = window.jspdf;
   const doc = new jsPDF({unit:'mm', format:'a4'});
   const W = 210, H = 297;
@@ -1475,6 +1487,11 @@ async function gerarPDF(isHist){
     <button class="btn btn-success btn-block" onclick="compartilharPdf()">📤 Enviar</button>`;
   ir('s-pdf');
   toast('✅ PDF gerado!');
+
+  }catch(e){
+    console.error('[PDF] Erro:', e);
+    toast('⚠️ Erro ao gerar PDF: '+e.message, 4000);
+  }
 }
 
 /* Compartilhar PDF via Web Share API ou fallback */
