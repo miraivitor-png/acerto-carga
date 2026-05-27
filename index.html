@@ -183,24 +183,133 @@ input,button,textarea,select{font-family:inherit}
 
 <script>
 /* ══ ESTADO ══ */
-const SK_ATIVO = 'mirai_ativo_v4';
-const SK_HIST  = 'mirai_hist_v4';
-let mapaAtivo = null;
-let historico  = [];
-let histView   = null;
-let selecao      = new Set();  // n.id das NFs marcadas para acerto
-let devAberto    = null;       // n.id com form de devolução aberto
-let parcelas     = [];         // [{forma, valor}] sendo montadas no acerto
-let formaAtual   = null;       // forma selecionada no picker
-let loteReaberto = null;       // loteId sendo editado (null = acerto novo)
+let mapaAtivo    = null;
+let historico    = [];   // cargas arquivadas (em memória, espelho do IDB)
+let histView     = null;
+let selecao      = new Set();
+let devAberto    = null;
+let parcelas     = [];
+let formaAtual   = null;
+let loteReaberto = null;
+let _dbReady     = null; // Promise do IndexedDB
 
-function salvar()    { try { localStorage.setItem(SK_ATIVO, JSON.stringify(mapaAtivo)); } catch{} }
-function salvarHist(){ try { localStorage.setItem(SK_HIST,  JSON.stringify(historico));  } catch{} }
+/* ── IndexedDB ──────────────────────────────────────
+   Stores:
+     cargas        key=id  → {id, ativo:bool, arquivadoEm, ...dadosCarga}
+     comprovantes  key=str → dataUrl (foto/pdf)
+     config        key=str → valor (ex: 'cargaAtivaId')
+─────────────────────────────────────────────────── */
+function abrirDB(){
+  if(_dbReady) return _dbReady;
+  _dbReady = new Promise((resolve, reject)=>{
+    const req = indexedDB.open('acerto_db', 2);
+    req.onupgradeneeded = (e)=>{
+      const d = e.target.result;
+      if(!d.objectStoreNames.contains('cargas'))        d.createObjectStore('cargas',        {keyPath:'id'});
+      if(!d.objectStoreNames.contains('comprovantes'))  d.createObjectStore('comprovantes');
+      if(!d.objectStoreNames.contains('config'))        d.createObjectStore('config');
+    };
+    req.onsuccess = (e)=>resolve(e.target.result);
+    req.onerror   = ()=>reject(req.error);
+  });
+  return _dbReady;
+}
 
-(function init(){
-  try { mapaAtivo = JSON.parse(localStorage.getItem(SK_ATIVO)||'null'); } catch{}
-  try { historico  = JSON.parse(localStorage.getItem(SK_HIST)||'[]');   } catch{}
-})();
+/* genérico: put/get/delete/getAll em qualquer store */
+function dbPut(store, value, key){
+  return abrirDB().then(d=>new Promise((res,rej)=>{
+    const tx  = d.transaction(store,'readwrite');
+    const req = key!==undefined ? tx.objectStore(store).put(value,key) : tx.objectStore(store).put(value);
+    req.onsuccess=()=>res(); req.onerror=()=>rej(req.error);
+  }));
+}
+function dbGet(store, key){
+  return abrirDB().then(d=>new Promise((res,rej)=>{
+    const tx  = d.transaction(store,'readonly');
+    const req = tx.objectStore(store).get(key);
+    req.onsuccess=()=>res(req.result??null); req.onerror=()=>rej(req.error);
+  }));
+}
+function dbDel(store, key){
+  return abrirDB().then(d=>new Promise((res,rej)=>{
+    const tx  = d.transaction(store,'readwrite');
+    const req = tx.objectStore(store).delete(key);
+    req.onsuccess=()=>res(); req.onerror=()=>rej(req.error);
+  }));
+}
+function dbGetAll(store){
+  return abrirDB().then(d=>new Promise((res,rej)=>{
+    const tx  = d.transaction(store,'readonly');
+    const req = tx.objectStore(store).getAll();
+    req.onsuccess=()=>res(req.result||[]); req.onerror=()=>rej(req.error);
+  }));
+}
+
+/* ── Salvar carga ativa ── */
+function salvar(){
+  if(!mapaAtivo) return Promise.resolve();
+  const dados = {...mapaAtivo, ativo:true};
+  return dbPut('cargas', dados)
+    .then(()=>dbPut('config','cargaAtivaId',mapaAtivo.id))
+    .catch(e=>console.warn('[DB] salvar erro:',e));
+}
+
+/* ── Arquivar carga (ativo→histórico) ── */
+function arquivarCargaAtiva(){
+  if(!mapaAtivo) return Promise.resolve();
+  const dados = {...mapaAtivo, ativo:false, arquivadoEm: agora()+' '+hoje()};
+  return dbPut('cargas', dados)
+    .then(()=>dbDel('config','cargaAtivaId'))
+    .then(()=>{ historico=[dados,...historico.filter(h=>h.id!==dados.id)]; })
+    .catch(e=>console.warn('[DB] arquivar erro:',e));
+}
+
+/* ── Limpar cargas com mais de 15 dias ── */
+function limparAntigos(){
+  const limite = Date.now() - 15*24*60*60*1000;
+  return dbGetAll('cargas').then(todas=>{
+    const velhas = todas.filter(c=>!c.ativo && new Date(c._ts||0).getTime() < limite);
+    return Promise.all(velhas.map(c=>dbDel('cargas',c.id)));
+  }).catch(()=>{});
+}
+
+/* ── Carregar tudo do IDB na inicialização ── */
+function carregarDoIDB(){
+  return abrirDB().then(()=>Promise.all([
+    dbGet('config','cargaAtivaId'),
+    dbGetAll('cargas')
+  ])).then(([idAtivo, todas])=>{
+    historico = todas
+      .filter(c=>!c.ativo)
+      .sort((a,b)=>(b._ts||0)-(a._ts||0));
+    if(idAtivo){
+      mapaAtivo = todas.find(c=>c.id===idAtivo)||null;
+    }
+    /* migração: se não tem nada no IDB, tenta localStorage legado */
+    if(!mapaAtivo){
+      try{
+        const leg = JSON.parse(localStorage.getItem('mirai_ativo_v4')||'null');
+        if(leg){ mapaAtivo=leg; salvar(); }
+      }catch{}
+    }
+    if(!historico.length){
+      try{
+        const legH = JSON.parse(localStorage.getItem('mirai_hist_v4')||'[]');
+        if(legH.length){
+          historico=legH;
+          legH.forEach(h=>dbPut('cargas',{...h,ativo:false}));
+        }
+      }catch{}
+    }
+    limparAntigos();
+  }).catch(e=>{ console.warn('[DB] carregarDoIDB erro:',e); });
+}
+
+/* ── Fotos / comprovantes ── */
+function chaveComp(pi){ return `comp_${mapaAtivo?.id||'x'}_${pi}`; }
+function salvarFoto(chave, dataUrl){ return dbPut('comprovantes', dataUrl, chave); }
+function carregarFoto(chave){ return dbGet('comprovantes', chave); }
+function deletarFoto(chave){ return dbDel('comprovantes', chave); }
 
 /* ══ UTILS ══ */
 function fmt(v){
@@ -236,22 +345,25 @@ function parseTXT(raw){
   let meta = { mapa:'', rota:'', vendedor:'', data:hoje() };
   const cliMap = {};
   let m;
-  if((m=raw.match(/Mapa\.+:\s*(\d+)/)))            meta.mapa     = m[1].trim();
-  if((m=raw.match(/Rota\.+:\s*(.+?)\s{3,}/)))      meta.rota     = m[1].trim();
-  if((m=raw.match(/VENDEDOR\.\:?\s*(.+?)\s{3,}/))) meta.vendedor = m[1].trim();
-  if((m=raw.match(/Data:\s*(\d{2}\/\d{2}\/\d{2,4})/))) meta.data = m[1].trim();
+  if((m=raw.match(/Mapa[.\s]+:\s*(\d+)/i)))               meta.mapa     = m[1].trim();
+  if((m=raw.match(/Rota[.\s]+:\s*(.+?)\s{2,}/i)))         meta.rota     = m[1].trim();
+  if((m=raw.match(/VENDEDOR[.\s:]+\s*(.+?)\s{2,}/i)))     meta.vendedor = m[1].trim();
+  if((m=raw.match(/Data[:\s]+(\d{2}\/\d{2}\/\d{2,4})/i))) meta.data    = m[1].trim();
 
-  const notaPat = /^\s{1,5}(\d{3})\s+\d+\s+(\d{4,5})\s+(.{20,29})(S Dinh|Vista)\s+(\d{6,7})\s+\s*(\d{1,3}(?:\.\d{3})*,\d{2})\s+(.+?)\s+____________/;
+  /* Regex unificado — funciona com ou sem coluna Restr. (Vista / S Dinh / vazio)
+     Testado contra ambos os formatos de TXT da Mirai */
+  const notaPat = /^\s{1,6}(\d{3})\s+\d+\s+(\d{3,5})\s+(.+?)\s{2,}(?:Vista|S\.?\s*Dinh)?\s*(\d{6,7})\s+(?:[\d.,]+\s+)?([\d.,]+)\s+\d+\s+(fat\s+\w+|bon|vis)/i;
+
   for(const line of lines){
     if(!/^\s{1,5}\d{3}\s/.test(line)) continue;
     const nm = notaPat.exec(line);
     if(!nm) continue;
-    const [,rotaCod,codCli,nomeCli,,nfNum,valorStr,tabStr] = nm;
-    const cod   = codCli.trim();
-    const nome  = nomeCli.trim().toUpperCase();
-    const valor = parseBRL(valorStr);
-    const tab   = tabStr.trim().toLowerCase();
-    const tipo  = tab.includes('bon')?'bon':tab.includes('blo')?'fat blo':'fat vis';
+    const [,rotaCod,codCli,nomeCli,nfNum,valorStr,tabStr] = nm;
+    const cod  = codCli.trim();
+    const nome = nomeCli.trim().toUpperCase();
+    const valor= parseBRL(valorStr);
+    const tab  = tabStr.trim().toLowerCase();
+    const tipo = tab.includes('bon')?'bon':tab.includes('blo')?'fat blo':'fat vis';
     if(!cliMap[cod]) cliMap[cod]={ codigo:cod, nome, rota:rotaCod, notas:[] };
     if(!cliMap[cod].notas.find(x=>x.nf===nfNum)){
       cliMap[cod].notas.push({
@@ -262,8 +374,8 @@ function parseTXT(raw){
       });
     }
   }
-  if(!meta.mapa) throw new Error('Número do mapa não encontrado.');
-  if(!Object.keys(cliMap).length) throw new Error('Nenhum cliente encontrado.');
+  if(!meta.mapa) throw new Error('Número do mapa não encontrado. Verifique se é o arquivo correto.');
+  if(!Object.keys(cliMap).length) throw new Error(`Nenhum cliente encontrado. O arquivo tem ${lines.length} linhas — formato não reconhecido.`);
   return { meta, clientes: Object.values(cliMap).sort((a,b)=>a.nome.localeCompare(b.nome)) };
 }
 
@@ -318,16 +430,22 @@ function renderHome(){
   html+=`<button class="btn ${mapaAtivo?'btn-outline':'btn-primary'} btn-block" style="margin-bottom:16px" onclick="ir('s-carregar')">
     📂 ${mapaAtivo?'Carregar novo mapa':'Carregar mapa'}</button>`;
   if(historico.length){
-    html+=`<div style="font-size:12px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Mapas anteriores</div>`;
-    historico.slice(0,5).forEach((m,i)=>{
+    html+=`<div style="font-size:12px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Mapas anteriores (${historico.length})</div>`;
+    historico.slice(0,15).forEach((m,i)=>{
       const tv=m.clientes.reduce((a,c)=>a+c.notas.reduce((b,n)=>b+(n.tipo==='bon'?0:n.valor),0),0);
-      html+=`<div class="hist-card" onclick="verHist(${i})">
-        <div style="display:flex;justify-content:space-between;align-items:center">
+      const prog=calcProg(m);
+      html+=`<div class="hist-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
           <div>
             <div style="font-size:14px;font-weight:700;color:var(--t1);font-family:'JetBrains Mono',monospace">${m.meta.mapa}</div>
-            <div style="font-size:11px;color:var(--t3);margin-top:2px">${m.meta.data} · arquivado ${m.arquivadoEm||''}</div>
+            <div style="font-size:11px;color:var(--t2);margin-top:2px">${m.meta.rota||'—'} · ${m.meta.data}</div>
+            <div style="font-size:11px;color:var(--t3);margin-top:1px">arquivado ${m.arquivadoEm||''} · ${prog}% concluído</div>
           </div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--t2)">${fmt(tv)}</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--green)">${fmt(tv)}</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-outline btn-sm" style="flex:1" onclick="verHist(${i})">👁 Ver resumo</button>
+          <button class="btn btn-primary btn-sm" style="flex:1" onclick="reativarCarga('${m.id}')">↩️ Reativar</button>
         </div>
       </div>`;
     });
@@ -442,10 +560,21 @@ function processarTXT(){
 }
 function confirmarMapa(){
   if(!previewData) return;
-  if(mapaAtivo){ mapaAtivo.arquivadoEm=agora()+' '+hoje(); historico=[mapaAtivo,...historico].slice(0,10); salvarHist(); }
-  mapaAtivo={...previewData, id:previewData.meta.mapa+'_'+Date.now(), criadoEm:agora()+' '+hoje()};
-  selecao.clear(); salvar(); previewData=null; etapaCarr='form';
-  toast('✅ Mapa carregado!'); ir('s-lista');
+  arquivarCargaAtiva().then(()=>{
+    mapaAtivo = {
+      ...previewData,
+      id: previewData.meta.mapa+'_'+Date.now(),
+      _ts: Date.now(),
+      criadoEm: agora()+' '+hoje(),
+      ativo: true
+    };
+    selecao.clear();
+    return salvar();
+  }).then(()=>{
+    previewData=null; etapaCarr='form';
+    toast('✅ Mapa carregado!');
+    ir('s-lista');
+  });
 }
 
 /* ══ LISTA DE CLIENTES ══ */
@@ -1078,6 +1207,23 @@ function verHist(i){
   ir('s-hist');
 }
 
+function reativarCarga(id){
+  const carga = historico.find(h=>h.id===id);
+  if(!carga){ toast('⚠️ Carga não encontrada'); return; }
+  const nomAtivo = mapaAtivo ? `Isso vai arquivar o mapa atual (${mapaAtivo.meta.mapa}). ` : '';
+  if(!confirm(`${nomAtivo}Reativar o mapa ${carga.meta.mapa} de ${carga.meta.data}?`)) return;
+
+  arquivarCargaAtiva().then(()=>{
+    mapaAtivo = {...carga, ativo:true, _ts: Date.now()};
+    historico = historico.filter(h=>h.id!==id);
+    selecao.clear();
+    return salvar();
+  }).then(()=>{
+    toast(`✅ Mapa ${carga.meta.mapa} reativado!`);
+    ir('s-lista');
+  });
+}
+
 /* ══ PWA — Service Worker ══ */
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
@@ -1087,56 +1233,12 @@ if('serviceWorker' in navigator){
   });
 }
 
-/* ══ IndexedDB — armazenamento de fotos/comprovantes ══
-   Substitui base64 no localStorage (sem limite de tamanho)
-   DB: acerto_db  |  Store: comprovantes  |  Key: loteId_parcelaIdx
-══════════════════════════════════════════════════════ */
-let db = null;
-function abrirDB(){
-  return new Promise((resolve, reject)=>{
-    if(db){ resolve(db); return; }
-    const req = indexedDB.open('acerto_db', 1);
-    req.onupgradeneeded = (e)=>{
-      e.target.result.createObjectStore('comprovantes');
-    };
-    req.onsuccess = (e)=>{ db=e.target.result; resolve(db); };
-    req.onerror   = ()=>reject(req.error);
-  });
-}
-function salvarFoto(chave, dataUrl){
-  return abrirDB().then(d=>{
-    return new Promise((resolve,reject)=>{
-      const tx  = d.transaction('comprovantes','readwrite');
-      const req = tx.objectStore('comprovantes').put(dataUrl, chave);
-      req.onsuccess = ()=>resolve();
-      req.onerror   = ()=>reject(req.error);
-    });
-  });
-}
-function carregarFoto(chave){
-  return abrirDB().then(d=>{
-    return new Promise((resolve,reject)=>{
-      const tx  = d.transaction('comprovantes','readonly');
-      const req = tx.objectStore('comprovantes').get(chave);
-      req.onsuccess = ()=>resolve(req.result||null);
-      req.onerror   = ()=>reject(req.error);
-    });
-  });
-}
-function deletarFoto(chave){
-  return abrirDB().then(d=>{
-    return new Promise((resolve)=>{
-      const tx = d.transaction('comprovantes','readwrite');
-      tx.objectStore('comprovantes').delete(chave);
-      tx.oncomplete = ()=>resolve();
-    });
-  });
-}
-
 /* ══ INIT ══ */
 const origIr=ir;
 window.ir=function(id){ origIr(id); if(id==='s-carregar'){ etapaCarr='form'; txtCarregado=''; renderCarregar(); } };
-renderHome();
+
+/* Carrega IDB primeiro, depois renderiza */
+carregarDoIDB().then(()=>renderHome());
 </script>
 </body>
 </html>

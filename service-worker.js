@@ -7,7 +7,7 @@ const CACHE_NAME = 'acerto-motorista-v2';
 
 /* Arquivos que ficam em cache para funcionar offline */
 const ARQUIVOS_CACHE = [
-  './app_motorista.html',
+  './index.html',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
@@ -63,7 +63,7 @@ self.addEventListener('fetch', (event) => {
       }).catch(() => {
         /* Offline e sem cache: retorna o HTML principal como fallback */
         if (event.request.destination === 'document') {
-          return caches.match('./app_motorista.html');
+          return caches.match('./index.html');
         }
       });
     })
