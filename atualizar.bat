@@ -27,9 +27,12 @@ if exist "%USERPROFILE%\Downloads\service-worker.js" (
 )
 
 echo.
+set /p MENSAGEM="O que foi alterado? "
+echo.
+
 echo Enviando para o GitHub...
 git add .
-git commit -m "atualizacao %date% %time%"
+git commit -m "%MENSAGEM%"
 git push
 
 echo.

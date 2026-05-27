@@ -180,6 +180,19 @@ input,button,textarea,select{font-family:inherit}
   <div class="bottom-bar" id="hist-bar"></div>
 </div>
 
+<!-- VISUALIZAR PDF -->
+<div id="s-pdf" class="screen">
+  <div class="topbar">
+    <button class="back" onclick="fecharPdfView()">←</button>
+    <span class="brand">PDF</span>
+    <h1 id="pdf-title">Fechamento</h1>
+  </div>
+  <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+    <iframe id="pdf-frame" style="flex:1;border:none;width:100%;background:#333"></iframe>
+  </div>
+  <div class="bottom-bar" id="pdf-bar"></div>
+</div>
+
 <div id="toast-el" class="toast" style="display:none"></div>
 
 <script>
@@ -193,6 +206,9 @@ let parcelas     = [];
 let formaAtual   = null;
 let loteReaberto = null;
 let _dbReady     = null; // Promise do IndexedDB
+let _pdfBlob     = null; // blob do PDF gerado
+let _pdfNome     = '';   // nome do arquivo PDF
+let _pdfOrigem   = '';   // 's-fech' ou 's-hist' para saber pra onde voltar
 
 /* ── IndexedDB ──────────────────────────────────────
    Stores:
@@ -878,9 +894,7 @@ function renderAcerto(){
     parcelas.forEach((p,pi)=>{
       const isPix = p.forma==='pix';
       const temArq = isPix && p.arquivoNome;
-      const jaEnviou = isPix && p.comprovanteEnviado;
-      const confirmou = isPix && p.comprovanteConfirmado;
-      const corBorda = !isPix?'transparent': confirmou?'rgba(34,212,122,.3)':temArq?'rgba(59,126,255,.3)':'rgba(245,166,35,.4)';
+      const corBorda = !isPix?'transparent': temArq?'rgba(34,212,122,.3)':'rgba(245,166,35,.4)';
 
       htmlPag+=`<div style="background:var(--bg3);border:1px solid ${corBorda};border-radius:var(--rs);padding:10px 12px;margin-bottom:8px">
         <!-- linha principal -->
@@ -891,10 +905,9 @@ function renderAcerto(){
           <button class="rem-parcela" onclick="removerParcela(${pi})">×</button>
         </div>`;
 
-      /* bloco comprovante Pix */
+      /* bloco comprovante Pix — só anexar foto pro PDF */
       if(isPix){
         if(!temArq){
-          /* ainda sem arquivo — mostra botão de anexar */
           htmlPag+=`
           <div style="margin-top:10px">
             <input type="file" id="inp-comp-${pi}" accept="image/*,application/pdf" capture="environment" style="display:none"
@@ -904,7 +917,6 @@ function renderAcerto(){
             </button>
           </div>`;
         } else {
-          /* arquivo selecionado — mostra miniatura e botão WhatsApp */
           htmlPag+=`
           <div style="margin-top:10px;display:flex;align-items:center;gap:10px;background:var(--bg2);border-radius:var(--rs);padding:8px 10px">
             ${p.arquivoTipo&&p.arquivoTipo.startsWith('image/')
@@ -917,25 +929,8 @@ function renderAcerto(){
             <button onclick="document.getElementById('inp-comp2-${pi}').click()" style="background:none;border:none;color:var(--t3);font-size:11px;cursor:pointer;font-family:inherit;flex-shrink:0">trocar</button>
             <input type="file" id="inp-comp2-${pi}" accept="image/*,application/pdf" capture="environment" style="display:none"
               onchange="anexarComprovante(${pi},this)">
-          </div>`;
-
-          if(!jaEnviou){
-            htmlPag+=`
-            <button class="btn btn-primary btn-block" style="margin-top:8px" onclick="abrirWhatsAppComprovante(${pi})">
-              📤 Enviar comprovante via WhatsApp
-            </button>`;
-          } else if(!confirmou){
-            htmlPag+=`
-            <div style="margin-top:8px;background:rgba(59,126,255,.1);border:1px solid rgba(59,126,255,.25);border-radius:var(--rs);padding:10px 12px;display:flex;align-items:center;gap:12px">
-              <input type="checkbox" id="conf-${pi}" style="width:24px;height:24px;accent-color:var(--green);cursor:pointer;flex-shrink:0"
-                onchange="confirmarEnvioComprovante(${pi},this.checked)">
-              <label for="conf-${pi}" style="font-size:13px;color:var(--t2);cursor:pointer">
-                Confirmei o envio do comprovante no WhatsApp
-              </label>
-            </div>`;
-          } else {
-            htmlPag+=`<div style="margin-top:8px;font-size:12px;color:var(--green);font-weight:700">✅ Comprovante confirmado</div>`;
-          }
+          </div>
+          <div style="margin-top:6px;font-size:11px;color:var(--green);font-weight:700">✅ Comprovante anexado — vai no PDF</div>`;
         }
       }
 
@@ -976,8 +971,8 @@ function renderAcerto(){
   htmlPag+=`<div id="acerto-err" style="color:var(--red);font-size:13px;margin-top:6px"></div>`;
   document.getElementById('acerto-content').innerHTML=htmlNFs+htmlPag;
 
-  const pixSemComp = parcelas.some(p=>p.forma==='pix'&&!p.comprovanteConfirmado);
-  const pronto=Math.abs(resto)<0.01&&parcelas.length>0&&!pixSemComp;
+  const pixSemFoto = parcelas.some(p=>p.forma==='pix'&&!p.arquivoNome);
+  const pronto=Math.abs(resto)<0.01&&parcelas.length>0&&!pixSemFoto;
   const rodape = loteReaberto
     ? `<button class="btn btn-danger btn-sm" onclick="desfazerAcerto()" style="flex-shrink:0">↩️ Desfazer</button>
        <button class="btn btn-success btn-block" onclick="confirmarAcerto()" ${pronto?'':'disabled style="opacity:.4;cursor:not-allowed"'}>
@@ -1018,44 +1013,12 @@ function anexarComprovante(pi, input){
       parcelas[pi].arquivoNome           = file.name;
       parcelas[pi].arquivoTipo           = file.type;
       parcelas[pi].arquivoTamanho        = (file.size/1024).toFixed(0)+' KB';
-      parcelas[pi].arquivoChave          = chaveComp(pi); // referência no IndexedDB
-      parcelas[pi].arquivoDataUrl        = dataUrl;       // cache em memória p/ miniatura
-      parcelas[pi].comprovanteEnviado    = false;
-      parcelas[pi].comprovanteConfirmado = false;
+      parcelas[pi].arquivoChave          = chaveComp(pi);
+      parcelas[pi].arquivoDataUrl        = dataUrl;
       renderAcerto();
     });
   };
   reader.readAsDataURL(file);
-}
-
-/* Abre WhatsApp com a legenda automática */
-function abrirWhatsAppComprovante(pi){
-  const p = parcelas[pi];
-  if(!p) return;
-  const lote = nfsSelecionadas();
-  const nfsStr = lote.map(({cliNome,nota:n})=>`NF ${n.nf} · ${cliNome}`).join('\n');
-  const legenda = `🧾 *Comprovante Pix*\n*Mapa:* ${mapaAtivo.meta.mapa}\n*Valor:* ${fmt(p.valor)}\n\n${nfsStr}\n\n_Anexe o comprovante a esta mensagem._`;
-  window.open('https://wa.me/?text='+encodeURIComponent(legenda),'_blank');
-  parcelas[pi].comprovanteEnviado = true;
-  renderAcerto();
-}
-
-/* Checkbox de confirmação manual */
-function confirmarEnvioComprovante(pi, checked){
-  parcelas[pi].comprovanteConfirmado = checked;
-  /* atualiza só o botão sem re-render completo para não perder o estado do checkbox */
-  const pixSemComp = parcelas.some(p=>p.forma==='pix'&&!p.comprovanteConfirmado);
-  const resto = Math.round((totalLote()-totalParcelas())*100)/100;
-  const pronto = Math.abs(resto)<0.01 && parcelas.length>0 && !pixSemComp;
-  const bar = document.getElementById('acerto-bar');
-  if(bar){
-    const btn = bar.querySelector('button:last-child');
-    if(btn){
-      btn.disabled = !pronto;
-      btn.style.opacity = pronto?'1':'.4';
-      btn.style.cursor  = pronto?'pointer':'not-allowed';
-    }
-  }
 }
 
 function removerDevLote(nfId,di){
@@ -1079,8 +1042,8 @@ function confirmarAcerto(){
   if(parcelas.length===0){ document.getElementById('acerto-err').textContent='⚠️ Lance ao menos uma forma de pagamento'; return; }
   const resto=Math.round((totalLote()-totalParcelas())*100)/100;
   if(Math.abs(resto)>=0.01){ document.getElementById('acerto-err').textContent=`⚠️ Faltam ${fmt(resto)} para fechar o total`; return; }
-  const pixSemComp=parcelas.some(p=>p.forma==='pix'&&!p.comprovanteConfirmado);
-  if(pixSemComp){ document.getElementById('acerto-err').textContent='⚠️ Confirme o envio do comprovante Pix antes de prosseguir'; return; }
+  const pixSemFoto=parcelas.some(p=>p.forma==='pix'&&!p.arquivoNome);
+  if(pixSemFoto){ document.getElementById('acerto-err').textContent='⚠️ Anexe o comprovante de cada Pix antes de confirmar'; return; }
   const lote=nfsSelecionadas();
   const tLote=totalLote();
   const novoLoteId = loteReaberto || uid(); // reutiliza o loteId se for reaberto
@@ -1494,31 +1457,63 @@ async function gerarPDF(isHist){
   doc.text(`Gerado em ${hoje()} às ${agora()} — Acerto Motorista · Comercial Bebidas Mirai`, ML, y);
 
   /* ═════════════════════════════════════════════
-     SALVAR E COMPARTILHAR
+     ABRIR NA TELA DE VISUALIZAÇÃO
   ═════════════════════════════════════════════ */
   const nomeArq = `Acerto_Mapa_${c.meta.mapa}_${c.meta.data.replace(/\//g,'-')}.pdf`;
   const pdfBlob = doc.output('blob');
 
-  /* Tentar Web Share API (funciona bem no Android) */
+  _pdfBlob   = pdfBlob;
+  _pdfNome   = nomeArq;
+  _pdfOrigem = isHist ? 's-hist' : 's-fech';
+
+  /* Mostrar tela do PDF */
+  const blobUrl = URL.createObjectURL(pdfBlob);
+  document.getElementById('pdf-title').textContent = `Mapa ${c.meta.mapa}`;
+  document.getElementById('pdf-frame').src = blobUrl;
+  document.getElementById('pdf-bar').innerHTML = `
+    <button class="btn btn-outline btn-sm btn-block" onclick="baixarPdf()">💾 Salvar</button>
+    <button class="btn btn-success btn-block" onclick="compartilharPdf()">📤 Enviar</button>`;
+  ir('s-pdf');
+  toast('✅ PDF gerado!');
+}
+
+/* Compartilhar PDF via Web Share API ou fallback */
+async function compartilharPdf(){
+  if(!_pdfBlob){ toast('⚠️ Gere o PDF primeiro'); return; }
   if(navigator.canShare){
-    const file = new File([pdfBlob], nomeArq, {type:'application/pdf'});
+    const file = new File([_pdfBlob], _pdfNome, {type:'application/pdf'});
     if(navigator.canShare({files:[file]})){
       try{
         await navigator.share({
-          title: `Acerto Mapa ${c.meta.mapa}`,
-          text: `Fechamento de carga — Mapa ${c.meta.mapa} — ${c.meta.data}`,
+          title: _pdfNome.replace('.pdf',''),
           files: [file]
         });
-        toast('✅ PDF compartilhado!');
+        toast('✅ Enviado!');
         return;
       }catch(e){
-        if(e.name==='AbortError'){ toast('Compartilhamento cancelado'); return; }
+        if(e.name==='AbortError'){ toast('Cancelado'); return; }
       }
     }
   }
-  /* Fallback: download direto */
-  doc.save(nomeArq);
+  /* fallback */
+  baixarPdf();
+}
+
+function baixarPdf(){
+  if(!_pdfBlob) return;
+  const url = URL.createObjectURL(_pdfBlob);
+  const a = document.createElement('a');
+  a.href=url; a.download=_pdfNome; a.click();
+  URL.revokeObjectURL(url);
   toast('✅ PDF salvo!');
+}
+
+function fecharPdfView(){
+  /* Limpar iframe */
+  const frame = document.getElementById('pdf-frame');
+  if(frame.src.startsWith('blob:')) URL.revokeObjectURL(frame.src);
+  frame.src='';
+  ir(_pdfOrigem || 's-fech');
 }
 
 function verHist(i){
