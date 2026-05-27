@@ -3,7 +3,7 @@
    Cache offline + suporte a armazenamento de fotos
 ═══════════════════════════════════════════════ */
 
-const CACHE_NAME = 'acerto-motorista-v1';
+const CACHE_NAME = 'acerto-motorista-v2';
 
 /* Arquivos que ficam em cache para funcionar offline */
 const ARQUIVOS_CACHE = [
