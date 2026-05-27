@@ -12,6 +12,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-title" content="Acerto Motorista">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
@@ -306,7 +307,6 @@ function carregarDoIDB(){
 }
 
 /* ── Fotos / comprovantes ── */
-function chaveComp(pi){ return `comp_${mapaAtivo?.id||'x'}_${pi}`; }
 function salvarFoto(chave, dataUrl){ return dbPut('comprovantes', dataUrl, chave); }
 function carregarFoto(chave){ return dbGet('comprovantes', chave); }
 function deletarFoto(chave){ return dbDel('comprovantes', chave); }
@@ -780,11 +780,14 @@ function reabrirLote(loteId, nfIdClicada){
 /* Desfaz o acerto de todas as NFs do lote atual */
 function desfazerAcerto(){
   const lote = nfsSelecionadas();
+  const loteIdADesfazer = lote.length>0 ? lote[0].nota.loteId : null;
   lote.forEach(({nota:n})=>{
     n.acertada = false;
     n.pagamentos = [];
     n.loteId = null;
   });
+  /* Limpar info do lote em _lotes */
+  if(loteIdADesfazer && mapaAtivo._lotes) delete mapaAtivo._lotes[loteIdADesfazer];
   selecao.clear(); loteReaberto=null; salvar();
   toast('↩️ Acerto desfeito');
   ir('s-lista');
@@ -1081,6 +1084,18 @@ function confirmarAcerto(){
   const lote=nfsSelecionadas();
   const tLote=totalLote();
   const novoLoteId = loteReaberto || uid(); // reutiliza o loteId se for reaberto
+
+  /* ── Salvar info dos comprovantes Pix no mapa ── */
+  if(!mapaAtivo._lotes) mapaAtivo._lotes={};
+  const compsPix = parcelas
+    .filter(p=>p.forma==='pix'&&p.arquivoChave)
+    .map(p=>({chave:p.arquivoChave, nome:p.arquivoNome||'', tipo:p.arquivoTipo||'', valor:p.valor}));
+  mapaAtivo._lotes[novoLoteId] = {
+    parcelas: parcelas.map(p=>({forma:p.forma, valor:p.valor})),
+    comprovantes: compsPix,
+    nfIds: lote.map(({nota:n})=>n.id)
+  };
+
   lote.forEach(({nota:n})=>{
     const dv=(n.devolucoes||[]).reduce((a,d)=>a+d.qtd*d.valorUnit,0);
     const liqNF=Math.max(0,n.valor-dv);
@@ -1164,6 +1179,7 @@ function renderFech(carga){
   document.getElementById(tc).innerHTML=html;
   document.getElementById(tb).innerHTML=`
     <button class="btn btn-outline btn-sm btn-block" onclick="copiarResumo(${isHist?'true':''})">📋 Copiar</button>
+    <button class="btn btn-primary btn-sm btn-block" onclick="gerarPDF(${isHist?'true':''})" style="min-width:120px">📄 PDF</button>
     <button class="btn btn-success btn-sm btn-block" onclick="enviarWA(${isHist?'true':''})">📱 WhatsApp</button>`;
 }
 function renderHist(){ if(!histView) return; renderFech(histView); }
@@ -1201,6 +1217,310 @@ function enviarWA(isHist){
   const c=isHist?histView:mapaAtivo;
   window.open('https://wa.me/?text='+encodeURIComponent(gerarTexto(c)),'_blank');
 }
+
+/* ══ GERAR PDF DE FECHAMENTO ══ */
+async function gerarPDF(isHist){
+  const c = isHist ? histView : mapaAtivo;
+  if(!c){ toast('⚠️ Nenhuma carga'); return; }
+  toast('⏳ Gerando PDF...',5000);
+
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF({unit:'mm', format:'a4'});
+  const W = 210, H = 297;
+  const ML = 15, MR = 15, MT = 20;
+  const PW = W - ML - MR; /* largura útil */
+  let y = MT;
+
+  /* ── helpers ── */
+  const cores = {
+    bg:     [15,23,42],     /* fundo escuro */
+    card:   [26,34,54],     /* card */
+    bdr:    [42,53,85],     /* borda */
+    t1:     [240,244,255],  /* texto principal */
+    t2:     [148,163,184],  /* texto secundário */
+    t3:     [74,88,128],    /* texto terciário */
+    blue:   [59,126,255],
+    green:  [34,212,122],
+    amber:  [245,166,35],
+    red:    [255,79,79],
+    white:  [255,255,255],
+    black:  [0,0,0]
+  };
+  function setC(c){ doc.setTextColor(...c); }
+  function setF(c){ doc.setFillColor(...c); }
+  function setD(c){ doc.setDrawColor(...c); }
+  function bold(s){ doc.setFont('helvetica','bold'); doc.setFontSize(s); }
+  function normal(s){ doc.setFont('helvetica','normal'); doc.setFontSize(s); }
+  function right(txt,rx,ry){ doc.text(txt, rx, ry, {align:'right'}); }
+  function checkPage(need){
+    if(y+need > H-15){ doc.addPage(); fundoPag(); y=MT; return true; }
+    return false;
+  }
+  function fundoPag(){
+    setF(cores.bg); doc.rect(0,0,W,H,'F');
+  }
+  function drawLine(x1,yy,x2){
+    setD(cores.bdr); doc.setLineWidth(0.3); doc.line(x1,yy,x2,yy);
+  }
+
+  /* ── Dados ── */
+  const t = calcTotais(c);
+  const conc = c.clientes.filter(cl=>statusCliente(cl.notas)==='concluido').length;
+  const totalNFs = c.clientes.reduce((a,cl)=>a+cl.notas.filter(n=>n.tipo!=='bon').length,0);
+  const acNFs = c.clientes.reduce((a,cl)=>a+cl.notas.filter(n=>n.acertada&&n.tipo!=='bon').length,0);
+
+  /* Agrupar lotes */
+  const lotesMap = {};
+  c.clientes.forEach(cl=>{
+    cl.notas.forEach(n=>{
+      if(!n.acertada||n.tipo==='bon') return;
+      const lid = n.loteId||('solo_'+n.id);
+      if(!lotesMap[lid]) lotesMap[lid]={nfs:[], pagFormas:{}, devTotal:0};
+      const dv=(n.devolucoes||[]).reduce((a,d)=>a+d.qtd*d.valorUnit,0);
+      lotesMap[lid].nfs.push({nf:n.nf, cli:cl.nome, valor:n.valor, liq:Math.max(0,n.valor-dv), dv, devs:n.devolucoes||[]});
+      lotesMap[lid].devTotal+=dv;
+      (n.pagamentos||[]).forEach(p=>{
+        if(p.forma==='bonificacao') return;
+        lotesMap[lid].pagFormas[p.forma]=(lotesMap[lid].pagFormas[p.forma]||0)+p.valor;
+      });
+    });
+  });
+  /* consolidar pagFormas duplicadas por rateio */
+  Object.values(lotesMap).forEach(lot=>{
+    /* se tiver _lotes salvo, usar parcelas originais (mais preciso que rateio) */
+    const loteInfo = (c._lotes||{})[Object.keys(lotesMap).find(k=>lotesMap[k]===lot)];
+    if(loteInfo && loteInfo.parcelas){
+      lot.pagFormas={};
+      loteInfo.parcelas.forEach(p=>{ lot.pagFormas[p.forma]=(lot.pagFormas[p.forma]||0)+p.valor; });
+    }
+  });
+
+  /* NFs pendentes */
+  const pendentes=[];
+  c.clientes.forEach(cl=>{
+    cl.notas.forEach(n=>{
+      if(n.tipo!=='bon'&&!n.acertada) pendentes.push({nf:n.nf, cli:cl.nome, valor:n.valor});
+    });
+  });
+
+  /* Carregar comprovantes do IndexedDB */
+  const compsCarregados = {};
+  const lotesIds = Object.keys(lotesMap);
+  for(const lid of lotesIds){
+    const loteInfo = (c._lotes||{})[lid];
+    if(!loteInfo||!loteInfo.comprovantes) continue;
+    for(const comp of loteInfo.comprovantes){
+      if(!comp.chave) continue;
+      try{
+        const dataUrl = await carregarFoto(comp.chave);
+        if(dataUrl) compsCarregados[lid] = compsCarregados[lid]||[];
+        if(dataUrl) compsCarregados[lid].push({dataUrl, nome:comp.nome, valor:comp.valor});
+      }catch(e){ console.warn('[PDF] Erro ao carregar comprovante:',e); }
+    }
+  }
+
+  /* ═════════════════════════════════════════════
+     PÁGINA 1 — CAPA / RESUMO SINTÉTICO
+  ═════════════════════════════════════════════ */
+  fundoPag();
+
+  /* cabeçalho */
+  bold(9); setC(cores.blue);
+  doc.text('COMERCIAL BEBIDAS MIRAI LTDA', ML, y);
+  y+=6;
+  bold(18); setC(cores.white);
+  doc.text('Fechamento de Carga', ML, y);
+  y+=9;
+
+  /* info do mapa */
+  normal(10); setC(cores.t2);
+  doc.text(`Mapa: ${c.meta.mapa}   |   Rota: ${c.meta.rota||'—'}   |   Data: ${c.meta.data}`, ML, y);
+  y+=5;
+  doc.text(`Vendedor: ${c.meta.vendedor||'—'}   |   ${conc} de ${c.clientes.length} clientes concluídos   |   ${acNFs}/${totalNFs} NFs acertadas`, ML, y);
+  y+=10;
+
+  /* ── card resumo financeiro ── */
+  const cardH = 58;
+  setF(cores.card); setD(cores.bdr); doc.setLineWidth(0.3);
+  doc.roundedRect(ML, y, PW, cardH, 3, 3, 'FD');
+  y+=8;
+
+  bold(10); setC(cores.t2);
+  doc.text('RESUMO POR FORMA DE PAGAMENTO', ML+10, y);
+  y+=8;
+
+  const linhas = [
+    ['💵  Dinheiro',     t.din,  cores.green],
+    ['📲  Pix',          t.pix,  cores.green],
+    ['📄  Boleto',       t.bol,  cores.t1],
+    ['⏳  Pendente',     t.pen,  cores.amber],
+    ['↩️  Devoluções',  -t.dev,  cores.red]
+  ];
+  linhas.forEach(([label,val,cor])=>{
+    normal(10); setC(cores.t2);
+    /* emoji não renderiza no jsPDF, usar texto simples */
+    const labelClean = label.replace(/[^\w\sçãõáéíóúâêôà]/gi,'').trim();
+    doc.text(labelClean, ML+12, y);
+    bold(10); setC(cor);
+    right((val<0?'− ':'')+fmt(Math.abs(val)), W-MR-10, y);
+    y+=6;
+  });
+
+  y+=4;
+  drawLine(ML+10, y, W-MR-10); y+=6;
+  bold(14); setC(cores.green);
+  doc.text('TOTAL RECEBIDO', ML+12, y);
+  right(fmt(t.total), W-MR-10, y);
+  y+=12;
+
+  /* ═════════════════════════════════════════════
+     SEÇÕES POR LOTE DE ACERTO
+  ═════════════════════════════════════════════ */
+  let loteNum=0;
+  for(const lid of lotesIds){
+    const lot = lotesMap[lid];
+    loteNum++;
+
+    /* Estimar altura necessária pra este lote */
+    const altBase = 16 + lot.nfs.length*6 + (lot.devTotal>0?8:0);
+    checkPage(altBase + 10);
+
+    /* título do lote */
+    y+=4;
+    drawLine(ML, y, W-MR); y+=6;
+    bold(10); setC(cores.blue);
+    doc.text(`LOTE ${loteNum}`, ML, y);
+
+    /* formas de pagamento do lote */
+    const formasStr = Object.entries(lot.pagFormas).map(([f,v])=>{
+      const nome = f.charAt(0).toUpperCase()+f.slice(1);
+      return `${nome}: ${fmt(v)}`;
+    }).join('   |   ');
+    normal(9); setC(cores.t2);
+    doc.text(formasStr, ML+22, y);
+    y+=3;
+
+    /* total do lote */
+    const totLote = Object.values(lot.pagFormas).reduce((a,v)=>a+v,0);
+    bold(9); setC(cores.t1);
+    right(`Total: ${fmt(totLote)}`, W-MR, y);
+    y+=6;
+
+    /* NFs do lote */
+    lot.nfs.forEach(nf=>{
+      checkPage(7);
+      normal(8); setC(cores.t3);
+      doc.text(`NF ${nf.nf}`, ML+4, y);
+      normal(8); setC(cores.t2);
+      doc.text(nf.cli.substring(0,30), ML+26, y);
+      bold(8); setC(nf.dv>0?cores.amber:cores.t1);
+      right(fmt(nf.liq), W-MR, y);
+      if(nf.dv>0){
+        normal(7); setC(cores.red);
+        right(`(dev -${fmt(nf.dv)})`, W-MR-30, y);
+      }
+      y+=5.5;
+    });
+
+    /* devoluções detalhadas */
+    if(lot.devTotal>0){
+      checkPage(10);
+      lot.nfs.forEach(nf=>{
+        nf.devs.forEach(d=>{
+          normal(7); setC(cores.red);
+          doc.text(`    ↩ ${d.produto} x${d.qtd} = ${fmt(d.qtd*d.valorUnit)}`, ML+4, y);
+          y+=4.5;
+        });
+      });
+    }
+
+    /* ── comprovante Pix embutido ── */
+    const comps = compsCarregados[lid];
+    if(comps && comps.length){
+      for(const comp of comps){
+        checkPage(60);
+        y+=3;
+        normal(8); setC(cores.blue);
+        doc.text(`Comprovante Pix — ${fmt(comp.valor)}`, ML+4, y);
+        y+=3;
+        try{
+          /* Detectar formato da imagem */
+          let imgFormat = 'JPEG';
+          if(comp.dataUrl.includes('image/png')) imgFormat='PNG';
+          /* Inserir imagem escalada pra caber na largura útil */
+          const imgW = Math.min(PW-8, 100);
+          const imgH = imgW * 1.2; /* proporção aprox */
+          checkPage(imgH+5);
+          doc.addImage(comp.dataUrl, imgFormat, ML+4, y, imgW, imgH);
+          y+=imgH+4;
+        }catch(e){
+          normal(7); setC(cores.amber);
+          doc.text(`[imagem não disponível: ${comp.nome}]`, ML+4, y);
+          y+=5;
+        }
+      }
+    }
+
+    y+=3;
+  }
+
+  /* ═════════════════════════════════════════════
+     PENDÊNCIAS (NFs não acertadas)
+  ═════════════════════════════════════════════ */
+  if(pendentes.length){
+    checkPage(20);
+    y+=4;
+    drawLine(ML, y, W-MR); y+=6;
+    bold(10); setC(cores.amber);
+    doc.text(`PENDÊNCIAS — ${pendentes.length} nota(s) não acertada(s)`, ML, y);
+    y+=7;
+    pendentes.forEach(p=>{
+      checkPage(7);
+      normal(8); setC(cores.t3);
+      doc.text(`NF ${p.nf}`, ML+4, y);
+      normal(8); setC(cores.t2);
+      doc.text(p.cli.substring(0,30), ML+26, y);
+      bold(8); setC(cores.amber);
+      right(fmt(p.valor), W-MR, y);
+      y+=5.5;
+    });
+  }
+
+  /* ── rodapé ── */
+  checkPage(15);
+  y+=8;
+  drawLine(ML, y, W-MR); y+=5;
+  normal(7); setC(cores.t3);
+  doc.text(`Gerado em ${hoje()} às ${agora()} — Acerto Motorista · Comercial Bebidas Mirai`, ML, y);
+
+  /* ═════════════════════════════════════════════
+     SALVAR E COMPARTILHAR
+  ═════════════════════════════════════════════ */
+  const nomeArq = `Acerto_Mapa_${c.meta.mapa}_${c.meta.data.replace(/\//g,'-')}.pdf`;
+  const pdfBlob = doc.output('blob');
+
+  /* Tentar Web Share API (funciona bem no Android) */
+  if(navigator.canShare){
+    const file = new File([pdfBlob], nomeArq, {type:'application/pdf'});
+    if(navigator.canShare({files:[file]})){
+      try{
+        await navigator.share({
+          title: `Acerto Mapa ${c.meta.mapa}`,
+          text: `Fechamento de carga — Mapa ${c.meta.mapa} — ${c.meta.data}`,
+          files: [file]
+        });
+        toast('✅ PDF compartilhado!');
+        return;
+      }catch(e){
+        if(e.name==='AbortError'){ toast('Compartilhamento cancelado'); return; }
+      }
+    }
+  }
+  /* Fallback: download direto */
+  doc.save(nomeArq);
+  toast('✅ PDF salvo!');
+}
+
 function verHist(i){
   histView=historico[i];
   document.getElementById('hist-brand').textContent='Mapa '+(histView?.meta?.mapa||'');
